@@ -10,6 +10,7 @@
 #include "sl_lidar_driver.h"
 
 using namespace sl;
+
 constexpr const char* PORT = "/dev/ttyUSB0";
 constexpr int BAUDRATE = 115200;
 constexpr size_t MAX_NODES = 8192;
