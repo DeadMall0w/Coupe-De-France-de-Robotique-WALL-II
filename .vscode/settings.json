@@ -60,5 +60,8 @@
         "csignal": "cpp",
         "map": "cpp",
         "fstream": "cpp"
-    }
+    },
+    "cSpell.words": [
+        "Slamtec"
+    ]
 }
