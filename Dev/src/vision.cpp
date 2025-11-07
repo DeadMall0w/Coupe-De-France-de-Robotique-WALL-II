@@ -1,50 +1,54 @@
+// script responsable de toute la gestion de la vision (lancé dans un thread séparé)
+
+
 // includes
-#include "../includes/vision.h"
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <atomic>
 
+#include "../includes/vision.h"
+#include "../includes/color.h"
+#include "../includes/ILidar.h"
+#include "../includes/Slamtec.h"
 
 // namespaces
 using namespace std::chrono;
 
 // headers
-void runLoop(double frequency);
-
-// script responsable de toute la gestion de la vision (lancé dans un thread séparé)
+void runLoop(std::atomic<bool>* stop);
 
 
-void vision(){
+std::unique_ptr<Slamtec> lidarTop;
+
+void vision(std::atomic<bool>* stop){
     // lancement du module de vision
-    std::cout << "Module de vision lancé" << std::endl;
+    lidarTop = std::make_unique<Slamtec>("/dev/ttyUSB0");
+
+    if (lidarTop->connect()){ // si on à réussi à se connecter
+        if (lidarTop->startScan()){ // si on à réussi à lancer le scan
+            runLoop(stop); // 10 fois par secondes
 
 
+            // une fois la boucle terminé on déconnecte le lidar
+            lidarTop->disconnect();
 
-    std::cout << "Lidar 1 - OK" << std::endl;
+        }
+    }
 
-    runLoop(10);
+    
+
 }
 
-void runLoop(double frequency) {
-    const auto frameDuration = duration<double>(1.0 / frequency);
-    auto lastTime = steady_clock::now();
 
-    while (true) {
-        // lancement de l'horloge pour compter le temps
-        auto start = steady_clock::now();
-        lastTime = start;
+void runLoop(std::atomic<bool>* stop) {
+    while (!*stop) {
+        std::vector<ScanPoint> points;
 
-        //task(delta); // exécute la tâche
-
-        auto elapsed = steady_clock::now() - start;
-        if (elapsed < frameDuration)
-            std::this_thread::sleep_for(frameDuration - elapsed);
-        else 
-            std::cout << "[⚠️  TEMPS DÉPASSÉ] "
-                      << "Durée = " << duration_cast<milliseconds>(elapsed).count()
-                      << " ms  (Budget = "
-                      << duration_cast<milliseconds>(frameDuration).count()
-                      << " ms)"
-                      << std::endl;
+        // grabData est bloquant, ne renvoie les points que quand il y à des nouveaux
+        if (lidarTop->grabData(points)) {
+            LidarUtils::writeScanToCSV(points);
+            //Todo : traitement des données du Lidar
+        }
     }
 }

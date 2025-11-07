@@ -1,93 +1,78 @@
-#include "../includes/Board.hpp"
+#include <iostream>
 #include <thread>
 #include <chrono>
-#include <iostream>
+#include <atomic>
+
 #include "../includes/vision.h"
+#include "../includes/Board.hpp"
+#include "../includes/Constant.h"
+#include "../includes/color.h"
+
 
 
 using namespace std::chrono;
-
-void runLoop(double frequency, void (*task)(double)) {
-    const auto frameDuration = duration<double>(1.0 / frequency);
-    auto lastTime = steady_clock::now();
-
-    while (true) {
-        // lancement de l'horloge pour compter le temps
-        auto start = steady_clock::now();
-        double delta = duration<double>(start - lastTime).count();
-        lastTime = start;
-
-        task(delta); // exécute la tâche
-
-        auto elapsed = steady_clock::now() - start;
-        if (elapsed < frameDuration)
-            std::this_thread::sleep_for(frameDuration - elapsed);
-        else 
-            std::cout << "[⚠️  TEMPS DÉPASSÉ] "
-                      << "Durée = " << duration_cast<milliseconds>(elapsed).count()
-                      << " ms  (Budget = "
-                      << duration_cast<milliseconds>(frameDuration).count()
-                      << " ms)"
-                      << std::endl;
-    }
-}
-
-// =====================
-// Tâches exemples
-// =====================
-
-// void strategie(double dt) {
-//     // décision 
-// }
-
-// void command(double dt) {
-//     std::cout << "[Commandes] Δt=" << dt << "s\n";
-//     // génération d'ordres moteur, envoi UART
-// }
-
-// void lidar(double dt) {
-//     std::cout << "[Lidar] Δt=" << dt << "s\n";
-//     // traitement lidar haut/bas
-// }
-
-// void logCom(double dt) {
-//     std::cout << "[Log/Unity] Δt=" << dt << "s\n";
-//     // transmission des logs ou état vers Unity
-// }
 
 // =====================
 // Main
 // =====================
 
 int main() {
-
-    // std::thread t_lidarSlamtec (test, 100);
-
+    std::cout << BOLDBLUE << "Hello, world !" << RESET << std::endl;
     
-    // std::thread t_strategy (runLoop, 10.0, strategie); // 100ms 
-//     // std::thread t2(runLoop, 10.0, command);
-//     // std::thread t3(runLoop, 10.0, lidar);
-//     std::thread t_com(runLoop, 10.0, logCom);
-
-//     while (1){
-//         printf("Hello world ! \n");
-// std::this_thread::sleep_for(50ms);
-
-//     }
-
-//     t_strategy.join();
-    // t2.join();
-    // t3.join();
-    // t4.join();
+    // bouton d'arrêt d'urgence 
+    std::atomic<bool> emergencyStop = false;
 
 
-    // // test sur le lidar
-    // Slamtec lidar("/dev/ttyUSB0");  // constructeur appelé automatiquement
+    // Thread d'écoute du "bouton d'urgence" (touche Entrée)
+    std::thread inputThread([&emergencyStop]() {
+        std::cout << "Appuis sur Entrée pour arreter le programme...\n";
+        std::cin.get();  // attend l'appui sur Entrée
+        emergencyStop = true;
+    });
 
-    // lidar.initialiser();            // appelle la méthode
-    // double d = lidar.lireDistance();
-    // std::cout << "Distance : " << d << std::endl;
+    // sauvegarde du temps
+    std::atomic<uint64_t> currentTimeMs = 0;
+    auto start = steady_clock::now();
+    std::atomic<bool> stopVision = false;
+    
+    // <----- Lancements des différents threads ---> 
+    // Lancement du thread vision
+    std::thread t_vision (vision, &stopVision);
+    
+
+    // <----- Attente appuis capteur 'start' ----->
+    //todo: attendre cette action
+    //todo: mettre l'état en 'en cours'
+    // -> nécessaire pour que tous les threads se mettent à fonctionner
+
+    // <----- Boucle principal ----->
+    std::cout << BOLDBLUE << "Lancement de la partie...." << RESET << std::endl;
+
+    // boucle qui dure le temps de la partie et qui met à jour le temps
+    while (currentTimeMs <= GAME_DURATION_MS)  {
+
+        //Todo : bouton d'urgence
+        if (emergencyStop){
+            break;
+        }
+
+        currentTimeMs = duration_cast<milliseconds>(steady_clock::now() - start).count();
+        std::this_thread::sleep_for(1ms); // pour éviter de trop surcharger le processeur
+    }
+
+    // <--- Fin de la partie ---->
+    //todo: mettre l'état en 'fini' 
+    std::cout << BOLDBLUE << "Temps terminé !" << RESET << std::endl;
 
 
-    std::thread t_vision (vision);
+    //todo: dire à tous les threads de finir ce qu'ils font et de se mettre en état d'arrêt
+    stopVision = true;
+    
+    // attendre les threads
+    if (t_vision.joinable()) t_vision.join();
+    if (inputThread.joinable()) inputThread.join();
+    
+    //todo: se mettre en standby pour une nouvelle partie / changement de configuration
+
+    return 0;
 }
