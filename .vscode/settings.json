@@ -59,7 +59,9 @@
         "codecvt": "cpp",
         "csignal": "cpp",
         "map": "cpp",
-        "fstream": "cpp"
+        "fstream": "cpp",
+        "condition_variable": "cpp",
+        "mutex": "cpp"
     },
     "cSpell.words": [
         "Slamtec"

@@ -83,7 +83,7 @@ int main() {
     IChannel* _channel;
     Result<ISerialChannel*> channel = createSerialPortChannel("/dev/ttyUSB0", 115200);
     ///  Create a LIDAR driver instance
-    ILidarDriver * lidar = *createLidarDriver();
+    ILidarDriver * l idar = *createLidarDriver();
     auto res = (*lidar)->connect(*channel);
     if(SL_IS_OK(res)){
         sl_lidar_response_device_info_t deviceInfo;

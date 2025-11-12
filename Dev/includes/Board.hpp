@@ -1,6 +1,9 @@
 #pragma once
+
 #include <array>
 #include <string>
+#include <mutex>
+
 #include "iostream"
 
 // ================================
@@ -81,32 +84,62 @@ struct Robot {
 // Structure qui contient **tout l'état de la partie**
 class Board {
 public:
+    // Accès au singleton
     static Board& instance();
 
+    // Initialisation
     void initialiseData(const std::string& src);
     void updateTime(int delta);
 
+    // ================================
     // Accès lecture
-    const Robot& getMyRobot() const { return myRobot; }
-    const Robot& getEnemyRobot() const { return enemyRobot; }
-    const Map& getMap() const { return map; }
-    int getTimeLeft() const { return timeLeft; }
-    GameState getState() const { return state; }
+    // ================================
+    Robot getMyRobot();
+    Robot getEnemyRobot();
+    Map getMap();
+    int getTimeLeft();
+    GameState getState();
+    Team getTeam();
 
-    // Accès écriture contrôlée
-    void setState(GameState newState) { state = newState; }
-    void setTeam(Team team) { myTeam = team; }
+    Zone getStorageZone(size_t index);
+    Zone getDepositZone(size_t index);
+    Zone getNid();
 
-    // Fonctions d’action
-    Robot& myRobotRef() { return myRobot; } // si tu veux un accès modifiable
+    // ================================
+    // Accès écriture / actions
+    // ================================
+    void setState(GameState newState);
+    void setTeam(Team team);
+    void setTimeLeft(int t);
+
+    // Robot
+    bool moveMyRobot(const Position& newPos);
+    bool moveEnemyRobot(const Position& newPos);
+    bool setMyRobotCleat(size_t slot, Cleat cleat);
+    bool setEnemyRobotCleat(size_t slot, Cleat cleat);
+
+    // Zones
+    bool setStorageZoneState(size_t index, ZoneState state);
+    bool setDepositZoneState(size_t index, ZoneState state);
+    void setNidState(ZoneState state);
 
 private:
-    Board() = default;
+    Board() = default; // constructeur privé
 
+    // garantir le fait qu'il n'y ait qu'une seule instance
+    Board(const Board&) = delete;
+    Board& operator=(const Board&) = delete;
+
+    // ================================
+    // Données internes
+    // ================================
+    std::mutex mtx;
     int timeLeft = 100;
     Robot myRobot, enemyRobot;
     Team myTeam;
     Map map;
     GameState state = GameState::Waiting;
-};
 
+    // Logique interne
+    bool isInsideMap(const Position& pos, const Size& size);
+};
