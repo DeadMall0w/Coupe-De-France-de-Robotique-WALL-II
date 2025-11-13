@@ -1,6 +1,8 @@
 #include <SBC_MotoDriver3.h>
 #include <Wire.h>  // inclut la librairie
 
+//https://chatgpt.com/c/691618c7-c8f0-8327-8d18-18b401324cda
+
 // Adresse I2C et pin OE, à adapter à ton montage
 SBCMotoDriver3 MotoDriver(0x15, 4);
 
@@ -65,12 +67,14 @@ void setMotor(int v1, int v2, int v3, int v4){
 
 void loop() {
 
-    int valA0 = -analogRead(A0); // Lit la valeur analogique sur A0 (0 à 1023)
-    int valA1 = analogRead(A1); // Lit la valeur analogique sur A1
+      int valA0 = analogRead(A0); // Lit la valeur analogique sur A0 (0 à 1023)
+  int valA1 = analogRead(A1); // Lit la valeur analogique sur A1
 
 
     dX = (valA0 / 1023.0) * 2 - 1;
     dY = (valA1 / 1023.0) * 2 - 1;
+
+    dX = -dX;
 
     if (dX < 0.1 && dX > -0.1){
         dX = 0;
@@ -96,7 +100,7 @@ void loop() {
     // MotoDriver.chanPwm(4, 80);
     // MotoDriver.chanPwm(6, 100);
 
-    int speed = 170;
+    int speed = 180;
     if (dY >= 0.7 && dX == 0){ // avancer tout droit
         setMotor(speed, speed, speed, speed);
     }else if (dY <= -0.7 && dX == 0){ // marche arriere
