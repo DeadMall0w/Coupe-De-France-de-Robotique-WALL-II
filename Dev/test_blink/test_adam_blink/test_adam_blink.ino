@@ -6,19 +6,47 @@
 // Adresse I2C et pin OE, à adapter à ton montage
 SBCMotoDriver3 MotoDriver(0x15, 4);
 
-double dX, dY;
+double dX = 0.0, dY = 0.0;
+String inputString = "";      // Chaîne pour stocker les données entrantes
+boolean stringComplete = false;  // Indique si la chaîne est complète
+
+// LED de debug (pin 13 intégrée sur Arduino)
+#define LED_PIN 13
+unsigned long lastBlink = 0;
+unsigned long lastDataReceived = 0;
+
 void setup() {
+  // Initialiser la LED de debug
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, HIGH);  // LED allumée = setup en cours
+  
   Serial.begin(9600);
-   Wire.begin();
+  inputString.reserve(32);  // Réserve de la mémoire pour la chaîne
+  
+  // Attendre que le port série soit prêt
+  delay(100);
+  
+  Wire.begin();
+  
   // Pull the oe_pin low to activate the board
   MotoDriver.enabled(true);
+  
   // Starts the I2C communication
   MotoDriver.begin();
+  
   // Switch off all outputs
   MotoDriver.allOff();
-  //MotoDriver.allOn(true, true);
   
-
+  // Clignoter 3 fois = setup OK
+  for(int i = 0; i < 3; i++) {
+    digitalWrite(LED_PIN, LOW);
+    delay(200);
+    digitalWrite(LED_PIN, HIGH);
+    delay(200);
+  }
+  digitalWrite(LED_PIN, LOW);
+  
+  lastBlink = millis();
 }
 
 
@@ -65,31 +93,71 @@ void setMotor(int v1, int v2, int v3, int v4){
 
 }
 
-void loop() {
-
-      int valA0 = analogRead(A0); // Lit la valeur analogique sur A0 (0 à 1023)
-  int valA1 = analogRead(A1); // Lit la valeur analogique sur A1
-
-
-    dX = (valA0 / 1023.0) * 2 - 1;
-    dY = (valA1 / 1023.0) * 2 - 1;
-
-    dX = -dX;
-
-    if (dX < 0.1 && dX > -0.1){
+void parseSerialData() {
+  // Parse les données reçues au format "dX,dY\n"
+  if (stringComplete) {
+    // LED clignote = données reçues
+    digitalWrite(LED_PIN, HIGH);
+    lastDataReceived = millis();
+    
+    int commaIndex = inputString.indexOf(',');
+    if (commaIndex > 0) {
+      String dxStr = inputString.substring(0, commaIndex);
+      String dyStr = inputString.substring(commaIndex + 1);
+      
+      dX = dxStr.toFloat();
+      dY = dyStr.toFloat();
+      
+      // Appliquer un seuil de zone morte
+      if (dX < 0.1 && dX > -0.1) {
         dX = 0;
+      }
+      if (dY < 0.1 && dY > -0.1) {
+        dY = 0;
+      }
     }
     
+    // Réinitialiser pour la prochaine lecture
+    inputString = "";
+    stringComplete = false;
+  }
+}
 
-    if (dY < 0.1 && dY > -0.1){
-        dY = 0;
+void loop() {
+  // Lire les données série
+  while (Serial.available()) {
+    char inChar = (char)Serial.read();
+    if (inChar == '\n') {
+      stringComplete = true;
+    } else {
+      inputString += inChar;
     }
+  }
+  
+  // Parser les données reçues
+  parseSerialData();
+  
+  // Éteindre la LED après 100ms (preuve de réception)
+  if (millis() - lastDataReceived > 100) {
+    digitalWrite(LED_PIN, LOW);
+  }
+  
+  // Clignotement lent si pas de données depuis 2 secondes (watchdog)
+  if (millis() - lastDataReceived > 2000) {
+    if (millis() - lastBlink > 1000) {
+      digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+      lastBlink = millis();
+    }
+  }
 
-    /*
-    *2   4
+  // Le reste du code utilise maintenant dX et dY reçus via UART
+  // au lieu de les lire depuis les joysticks
 
-    *0   6 
-    */
+  /*
+  *2   4
+
+  *0   6 
+  */
  
     // setMotor(-100,100,0,0);
     // delay(1000);
@@ -181,3 +249,4 @@ void loop() {
 //         dY = 0;
 //     }
 // }
+
