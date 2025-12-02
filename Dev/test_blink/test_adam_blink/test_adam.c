@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <termios.h>
 #include <fcntl.h>
+#include <poll.h>
 
 // --- Paramètres ---
 // Utilisation de UART0 sur Raspberry Pi 5
@@ -25,12 +26,14 @@ void enableRawMode() {
     atexit(disableRawMode);
     
     struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO | ICANON);
+    raw.c_lflag &= ~(ECHO | ICANON | ISIG);
+    raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+    raw.c_oflag &= ~(OPOST);
+    raw.c_cflag |= (CS8);
     raw.c_cc[VMIN] = 0;
     raw.c_cc[VTIME] = 0;
     
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
 }
 
 int main()
@@ -73,29 +76,37 @@ int main()
     int running = 1;
     int frameCount = 0;
     
+    // Configuration de poll pour la lecture clavier
+    struct pollfd fds[1];
+    fds[0].fd = STDIN_FILENO;
+    fds[0].events = POLLIN;
+    
     printf("[DEBUG] Début de la boucle principale\n");
+    printf("[DEBUG] Système poll() initialisé\n");
     
     while (running)
     {
         frameCount++;
         
-        // Lire le clavier (non-bloquant)
-        c = getchar();
-        
-        // Debug : afficher le caractère lu (si valide)
-        if (c != -1 && c != 255) {
-            printf("[DEBUG] Touche détectée: '%c' (code: %d)\n", c, (int)c);
-        }
-        
         // Garder les dernières valeurs par défaut
         dX = lastDX;
         dY = lastDY;
         
-        // Traiter les touches
-        switch(c) {
+        // Utiliser poll avec timeout de 0 (non-bloquant)
+        int poll_result = poll(fds, 1, 0);
+        
+        if (poll_result > 0 && (fds[0].revents & POLLIN)) {
+            // Des données sont disponibles
+            int bytes_read = read(STDIN_FILENO, &c, 1);
+            
+            if (bytes_read > 0) {
+                printf("[DEBUG] Touche détectée: '%c' (code: %d)\n", c, (int)c);
+                
+                // Traiter les touches
+                switch(c) {
             // Z = Avancer
-            case 'z':
-            case 'Z':
+            case 'w':
+            case 'W':
                 dY = 1.0;
                 dX = 0.0;
                 printf("[COMMANDE] ↑ AVANCER (dX=%.2f, dY=%.2f)\n", dX, dY);
@@ -110,8 +121,8 @@ int main()
                 break;
             
             // Q = Gauche
-            case 'q':
-            case 'Q':
+            case 'a':
+            case 'A':
                 dX = -1.0;
                 dY = 0.0;
                 printf("[COMMANDE] ← GAUCHE (dX=%.2f, dY=%.2f)\n", dX, dY);
@@ -134,8 +145,8 @@ int main()
                 break;
             
             // R = Avant-Gauche (diagonale)
-            case 'r':
-            case 'R':
+            case 'q':
+            case 'Q':
                 dX = -0.8;
                 dY = 0.8;
                 printf("[COMMANDE] ↖ AVANT-GAUCHE (dX=%.2f, dY=%.2f)\n", dX, dY);
@@ -150,8 +161,8 @@ int main()
                 break;
             
             // V = Arrière-Gauche (diagonale)
-            case 'v':
-            case 'V':
+            case 'z':
+            case 'Z':
                 dX = -0.8;
                 dY = -0.8;
                 printf("[COMMANDE] ↙ ARRIÈRE-GAUCHE (dX=%.2f, dY=%.2f)\n", dX, dY);
@@ -178,6 +189,8 @@ int main()
             default:
                 // Ne rien afficher si pas de touche (éviter spam)
                 break;
+                }
+            }
         }
         
         // Sauvegarder les valeurs pour la prochaine itération
