@@ -176,6 +176,23 @@ void loop() {
     }
   }
 
+  // Le reste du code utilise maintenant dX et dY reçus via UART
+  // au lieu de les lire depuis les joysticks
+
+  /*
+  *2   4
+
+  *0   6 
+  */
+ 
+    // setMotor(-100,100,0,0);
+    // delay(1000);
+    // setMotor(100,0,0,0);
+    // delay  (1000);
+    // MotoDriver.chanPwm(0, 200);
+    // MotoDriver.chanPwm(2, 40);
+    // MotoDriver.chanPwm(4, 80);
+    // MotoDriver.chanPwm(6, 100);
 
     int speed = 180;
     if (dY >= 0.7 && dX == 0){ // avancer tout droit
@@ -202,3 +219,59 @@ void loop() {
         setMotor(0,0,0,0);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+// void setup() {
+//   Serial.begin(9600); // Démarre le port série à 9600 bauds
+// }
+
+
+// double map(double x, double in_min, double in_max, double out_min, double out_max);
+// void readValue();
+
+// double dX, dY;
+
+// void loop() {
+
+//     readValue();
+//     Serial.print(" dX : ");
+//     Serial.println(dX);
+//     Serial.print(" dY : ");
+//     Serial.println(dY);
+//     Serial.println("");
+//     Serial.println("");
+
+
+
+//     delay(500); // pause de 500 ms entre les lectures
+// }
+
+
+// void readValue(){
+//   int valA0 = analogRead(A0); // Lit la valeur analogique sur A0 (0 à 1023)
+//   int valA1 = analogRead(A1); // Lit la valeur analogique sur A1
+
+
+//     dX = (valA0 / 1023.0) * 2 - 1;
+//     dY = (valA1 / 1023.0) * 2 - 1;
+
+//     if (dX < 0.1 && dX > -0.1){
+//         dX = 0;
+//     }
+    
+
+//     if (dY < 0.1 && dY > -0.1){
+//         dY = 0;
+//     }
+// }
