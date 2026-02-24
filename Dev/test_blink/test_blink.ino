@@ -14,9 +14,11 @@ void setup() {
   MotoDriver.begin();
   // Switch off all outputs
   MotoDriver.allOff();
-  //MotoDriver.allOn(true, true);
-  
 
+
+
+  
+  MotoDriver.allOn(true, true);
 }
 
 

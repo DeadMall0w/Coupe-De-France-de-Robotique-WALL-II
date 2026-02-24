@@ -109,7 +109,7 @@ int main() {
 
     //* <----- Boucle principal ----->
     std::cout << BOLDBLUE << "Lancement de la partie...." << RESET << std::endl;
-²
+
     // boucle qui dure le temps de la partie et qui met à jour le temps
     while (currentTimeMs <= GAME_DURATION_MS)  {
 

@@ -35,9 +35,6 @@ void vision(std::atomic<bool>* stop){
 
         }
     }
-
-    
-
 }
 
 
@@ -49,6 +46,10 @@ void runLoop(std::atomic<bool>* stop) {
         if (lidarTop->grabData(points)) {
             LidarUtils::writeScanToCSV(points);
             //Todo : traitement des données du Lidar
+            // for (const auto& point : points) {
+            //     std::cout << "Angle: " << point.angle_deg 
+            //               << ", Distance: " << point.dist_mm << std::endl;
+            // }
         }
     }
 }
