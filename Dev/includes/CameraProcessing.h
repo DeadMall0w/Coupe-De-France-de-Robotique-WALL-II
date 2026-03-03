@@ -66,8 +66,18 @@ public:
     // Vérifie si la caméra est ouverte
     bool isOpened() const;
 
+    // Active/désactive le mode debug visuel (dessine les boîtes sur la frame)
+    void setDebug(bool enabled);
+
+    // Récupère la dernière frame annotée (vide si debug désactivé)
+    cv::Mat getDebugFrame() const;
+
 private:
     cv::VideoCapture cap;
+
+    // Mode debug visuel
+    bool debugEnabled = false;
+    cv::Mat debugFrame;
 
     // Éléments structurants pré-calculés
     cv::Mat kernelOpen;
