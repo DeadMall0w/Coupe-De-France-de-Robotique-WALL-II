@@ -1,0 +1,28 @@
+# Makefile pour le test caméra standalone
+# Usage : make -f makefile_camera && ./test_camera [gstreamer|v4l2]
+
+CXX := g++
+CXXFLAGS := -std=c++17 -O2 -Wall -Wextra \
+            -I../../Dev/includes \
+            -I../../Dev/lib/include \
+            $(shell pkg-config --cflags opencv4)
+LDFLAGS := $(shell pkg-config --libs opencv4)
+
+TARGET := test_camera
+SRCS := test_camera.cpp ../../Dev/src/CameraProcessing.cpp
+
+.PHONY: all clean run run-v4l2
+
+all: $(TARGET)
+
+$(TARGET): $(SRCS)
+	$(CXX) $(CXXFLAGS) $(SRCS) $(LDFLAGS) -o $@
+
+run: $(TARGET)
+	./$(TARGET) gstreamer
+
+run-v4l2: $(TARGET)
+	./$(TARGET) v4l2
+
+clean:
+	rm -f $(TARGET)

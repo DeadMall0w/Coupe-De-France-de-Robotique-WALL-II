@@ -5,9 +5,11 @@
 # Compilateur et options par défaut
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra \
-            -I/home/rapha/testLidar/rplidar_sdk/sdk/include \
-            -I/home/rapha/testLidar/rplidar_sdk/sdk/src \
-            -I/home/rapha/testLidar/rplidar_sdk/sdk/src/hal
+            -I$(PWD)/lib/include \
+            $(shell pkg-config --cflags opencv4)
+
+# Flags de linkage OpenCV
+LDFLAGS := $(shell pkg-config --libs opencv4)
 
 # Répertoires source et binaires
 SRC_DIR := src
@@ -24,7 +26,7 @@ OFFICIAL_OBJ_DIR := build/obj/official
 OFFICIAL_OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OFFICIAL_OBJ_DIR)/%.o,$(SRCS))
 
 # Librairie LIDAR
-LIDAR_LIB := /home/rapha/testLidar/rplidar_sdk/output/Linux/Release/libsl_lidar_sdk.a
+LIDAR_LIB := $(PWD)/lib/bin/libsl_lidar_sdk.a
 
 # ======================================================
 #        🏁 Version officielle (Tournoi)
@@ -33,7 +35,7 @@ official: CXXFLAGS += -O2
 official: $(BIN_DIR)/$(TARGET)
 
 $(BIN_DIR)/$(TARGET): $(OFFICIAL_OBJS) | $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $(OFFICIAL_OBJS) $(LIDAR_LIB) -o $@
+	$(CXX) $(CXXFLAGS) $(OFFICIAL_OBJS) $(LIDAR_LIB) $(LDFLAGS) -o $@
 
 $(OFFICIAL_OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OFFICIAL_OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@

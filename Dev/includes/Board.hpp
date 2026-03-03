@@ -5,6 +5,7 @@
 #include <mutex>
 
 #include "iostream"
+#include "CameraProcessing.h"
 
 // ================================
 // Définition des types de base
@@ -58,9 +59,9 @@ struct Cleat {
 
 // Une zone du plateau
 struct Zone {
-    Position position; // position de la zone sur le plateau
-    Size size;         // taille de la zone
-    ZoneState state;   // état actuel de la zone
+    Position position;          // position de la zone sur le plateau
+    Size size;                  // taille de la zone
+    ZoneState state;            // état actuel de la zone
 };
 
 // Le plateau de jeu
@@ -73,6 +74,7 @@ struct Map {
 // Robot
 struct Robot {
     Position position;           // position actuelle du robot
+    double orientation_deg = 0.0; // orientation en degrés (0° = axe X+, sens trigonométrique)
     Size size;                   // taille du robot
     std::array<Cleat, 4> cleatsHeld; // cleats/palets tenus par le robot (max 4)
 };
@@ -105,6 +107,13 @@ public:
     Zone getDepositZone(size_t index);
     Zone getNid();
 
+    // Orientation
+    double getMyRobotOrientation();
+
+    // Caméra
+    CameraResult getCameraResult();
+    CameraOrder  getCameraOrder();
+
     // ================================
     // Accès écriture / actions
     // ================================
@@ -115,6 +124,7 @@ public:
     // Robot
     bool moveMyRobot(const Position& newPos);
     bool moveEnemyRobot(const Position& newPos);
+    void setMyRobotOrientation(double angle_deg);
     bool setMyRobotCleat(size_t slot, Cleat cleat);
     bool setEnemyRobotCleat(size_t slot, Cleat cleat);
 
@@ -122,6 +132,9 @@ public:
     bool setStorageZoneState(size_t index, ZoneState state);
     bool setDepositZoneState(size_t index, ZoneState state);
     void setNidState(ZoneState state);
+
+    // Caméra
+    void setCameraResult(const CameraResult& result);
 
 private:
     Board() = default; // constructeur privé
@@ -139,6 +152,9 @@ private:
     Team myTeam;
     Map map;
     GameState state = GameState::Waiting;
+
+    // Caméra
+    CameraResult cameraResult;
 
     // Logique interne
     bool isInsideMap(const Position& pos, const Size& size);

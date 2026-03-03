@@ -76,6 +76,12 @@ void loop() {
 
     dX = -dX;
 
+    // Debug prints for raw values
+    Serial.print("valA0: ");
+    Serial.print(valA0);
+    Serial.print(" valA1: ");
+    Serial.println(valA1);
+
     if (dX < 0.1 && dX > -0.1){
         dX = 0;
     }
@@ -84,6 +90,12 @@ void loop() {
     if (dY < 0.1 && dY > -0.1){
         dY = 0;
     }
+
+    // Debug prints
+    Serial.print("dX: ");
+    Serial.print(dX);
+    Serial.print(" dY: ");
+    Serial.println(dY);
 
     /*
     *2   4
@@ -102,28 +114,35 @@ void loop() {
 
     int speed = 180;
     if (dY >= 0.7 && dX == 0){ // avancer tout droit
+        Serial.println("Avancer tout droit");
         setMotor(speed, speed, speed, speed);
     }else if (dY <= -0.7 && dX == 0){ // marche arriere
+        Serial.println("Marche arrière");
         setMotor(-speed, -speed, -speed, -speed);
     }else if (dY == 0 && dX >= 0.6){ // droite
+        Serial.println("Droite");
         setMotor(-speed, speed, -speed, speed);
-    }else if (dY == 0 && dX <= -0.6){ // droite
+    }else if (dY == 0 && dX <= -0.6){ // gauche
+        Serial.println("Gauche");
         setMotor(speed, -speed, speed, -speed);
-    }else if (dX >= .7 && dY >= 0.7)
-       setMotor(0, speed, 0, speed);
-    else if (dX >= .7 && dY <= -0.7){
-       setMotor(0, -speed, 0, -speed);
-    }
-       else if (dX <= -.7 && dY >= 0.7){
-       setMotor(speed, 0, speed, 0);
-       }
-    else if (dX <= -.7 && dY <= -0.7)
-    {
-       setMotor(-speed,0,-speed,0);
-    }
-    else{
+    }else if (dX >= .7 && dY >= 0.7){
+        Serial.println("Diagonale avant droite");
+        setMotor(0, speed, 0, speed);
+    }else if (dX >= .7 && dY <= -0.7){
+        Serial.println("Diagonale arrière droite");
+        setMotor(0, -speed, 0, -speed);
+    }else if (dX <= -.7 && dY >= 0.7){
+        Serial.println("Diagonale avant gauche");
+        setMotor(speed, 0, speed, 0);
+    }else if (dX <= -.7 && dY <= -0.7){
+        Serial.println("Diagonale arrière gauche");
+        setMotor(-speed,0,-speed,0);
+    }else{
+        Serial.println("Stop");
         setMotor(0,0,0,0);
     }
+
+    delay(100); // Petit délai pour éviter de flooder le serial
 }
 
 

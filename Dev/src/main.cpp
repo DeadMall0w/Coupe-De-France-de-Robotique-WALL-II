@@ -4,6 +4,7 @@
 #include <atomic>
 
 #include "../includes/vision.h"
+#include "../includes/camera.h"
 #include "../includes/Board.hpp"
 #include "../includes/Constant.h"
 #include "../includes/color.h"
@@ -28,7 +29,7 @@ int main() {
     Board& board = Board::instance();
 
     // Initialisation
-    board.initialiseData("config.json");
+    board.initialiseData("data/config.json");
 
     //* <----- tests --------->
     // std::cout << "=== Test Singleton Board ===\n";
@@ -96,11 +97,14 @@ int main() {
     std::atomic<uint64_t> currentTimeMs = 0;
     auto start = steady_clock::now();
     std::atomic<bool> stopVision = false;
+    std::atomic<bool> stopCamera = false;
     
-    //* <----- Lancements des différents threads ---> 
+    //* <----- Lancements des différents threads --->
     // Lancement du thread vision
     std::thread t_vision (vision, &stopVision);
     
+    // Lancement du thread caméra
+    std::thread t_camera (camera, &stopCamera);
 
     //* <----- Attente appuis capteur 'start' ----->
     //todo: attendre cette action
@@ -109,7 +113,7 @@ int main() {
 
     //* <----- Boucle principal ----->
     std::cout << BOLDBLUE << "Lancement de la partie...." << RESET << std::endl;
-²
+
     // boucle qui dure le temps de la partie et qui met à jour le temps
     while (currentTimeMs <= GAME_DURATION_MS)  {
 
@@ -129,9 +133,11 @@ int main() {
 
     //todo: dire à tous les threads de finir ce qu'ils font et de se mettre en état d'arrêt
     stopVision = true;
+    stopCamera = true;
     
     // attendre les threads
     if (t_vision.joinable()) t_vision.join();
+    if (t_camera.joinable()) t_camera.join();
     if (inputThread.joinable()) inputThread.join();
     
     //todo: se mettre en standby pour une nouvelle partie / changement de configuration

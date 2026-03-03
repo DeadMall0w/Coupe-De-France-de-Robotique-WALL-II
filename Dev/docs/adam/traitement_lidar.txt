@@ -1,0 +1,132 @@
+en lisant la doc, board.cpp et vision.cpp, aide moi
+je veux plusieurs choses :
+- déjà, le plateau est de dimension 300cm par 200cm avec des bordures de 7cm de haut. le lidar sera sur le robot à une hauteur d'une quinze / vingtaine de cm. j'aimerais que, à partir de la position de départ connue et de la mise à jour de la position du robot, tous les points en dehors du plateau soient ignorés car données pas importantes
+- puis, j'aimerais traiter les points dans le plateau de la manière suivante : normalement, il n'y aura qu'un robot adverse qui pourra être détecté. ainsi, j'aimerais suivre et mettre à jour la position du robot adverse.
+- enfin, j'aimerais que, à l'aide des éléments du plateau qui sont à une position prédéfinie connue, on puisse mettre à jour si le robot adverse est déjà passé par ces zones ou non, en fonction de ses déplacements.
+avant de passer à l'action, proposes une manière de s'y prendre : variables à faire, fichier à modifier, traitement à faire, complexité des calculs, structures à créer, modulage du code etc
+
+---
+
+## Proposition d'architecture — Traitement LIDAR
+
+### 1. Ce qui manque dans les structures existantes
+
+**Problème critique** : `Robot` n'a pas d'**orientation**. Impossible de convertir les points polaires LIDAR (angle, distance) en coordonnées absolues sur le plateau sans connaître l'angle du robot.
+
+**Problème secondaire** : les dimensions du plateau sont codées en dur (`10x10` dans `isInsideMap`) et il n'y a aucune constante pour 300×200 cm.
+
+---
+
+### 2. Modifications proposées par fichier
+
+#### A. Constant.h — Ajouter les constantes du plateau
+```cpp
+constexpr double MAP_WIDTH_CM  = 300.0;   // largeur plateau (X)
+constexpr double MAP_HEIGHT_CM = 200.0;   // hauteur plateau (Y)
+constexpr double BORDER_HEIGHT_CM = 7.0;  // hauteur bordures
+constexpr double LIDAR_HEIGHT_CM  = 17.0; // hauteur LIDAR (~15-20cm)
+constexpr double ENEMY_ROBOT_RADIUS_CM = 25.0; // rayon approximatif du robot adverse (pour clustering)
+constexpr double ZONE_PROXIMITY_CM = 15.0;     // distance en dessous de laquelle on considère que le robot est "dans" une zone
+```
+
+#### B. Board.hpp — Modifications structurelles
+
+- Ajouter `double orientation_deg` à `Robot` (angle en degrés, 0° = axe X positif)
+- Ajouter `bool visitedByEnemy` à `Zone`
+- Ajouter des getters/setters pour l'orientation dans `Board`
+- Corriger `isInsideMap` pour utiliser les vraies dimensions (300×200)
+
+#### C. Nouveau fichier : `includes/LidarProcessing.h` + `src/LidarProcessing.cpp`
+
+C'est le cœur du traitement. Séparé de `vision.cpp` pour la modularité.
+
+**Pipeline de traitement :**
+
+```
+ScanPoints (polaire, relatif au robot)
+    │
+    ▼
+① polarToAbsolute()         ← conversion en coordonnées plateau (x_cm, y_cm)
+    │                          utilise : position robot + orientation robot
+    ▼
+② filterOutsideMap()        ← supprime les points hors 300×200
+    │
+    ▼
+③ clusterPoints()           ← regroupe les points proches (naïf, 1 seul cluster attendu)
+    │
+    ▼
+④ estimateEnemyPosition()   ← centroïde du cluster → position adverse
+    │
+    ▼
+⑤ checkZoneVisits()         ← pour chaque zone, si le robot adverse est à proximité → marquer visitée
+```
+
+**Structures à créer :**
+```cpp
+struct AbsolutePoint {
+    double x_cm;  // position absolue sur le plateau
+    double y_cm;
+};
+
+struct Cluster {
+    std::vector<AbsolutePoint> points;
+    AbsolutePoint centroid;  // calculé après clustering
+};
+```
+
+#### D. vision.cpp — Intégrer le pipeline
+
+`runLoop()` appellera simplement le pipeline de `LidarProcessing` et écrira les résultats dans le `Board` via les setters existants (`moveEnemyRobot`, `setStorageZoneState`, etc.).
+
+#### E. board.cpp — Corrections mineures
+
+- Corriger `isInsideMap` pour utiliser `MAP_WIDTH_CM` / `MAP_HEIGHT_CM`
+- Ajouter getter/setter orientation
+- Ajouter getter/setter `visitedByEnemy` sur les zones
+
+---
+
+### 3. Complexité des calculs (par scan, ~10 Hz)
+
+| Étape | Complexité | Coût estimé |
+|-------|-----------|-------------|
+| ① Conversion polaire→cartésien | O(n) | n ≤ 8192, trivial |
+| ② Filtrage hors plateau | O(n) | simple comparaison x/y |
+| ③ Clustering | O(n) single-pass | après filtrage, n très réduit (~50-200 points restants) |
+| ④ Centroïde | O(k) | k = taille du cluster |
+| ⑤ Check zones | O(z) | z = 19 zones (8+10+1) |
+
+**Total : < 1ms par scan** — aucun problème de performance.
+
+#### Pourquoi un clustering naïf suffit :
+- Après filtrage des bordures et du sol, il ne reste que les objets **au-dessus de 7cm et en dessous de ~17cm** (hauteur LIDAR)
+- Seul le robot adverse sera dans cette catégorie (les éléments de jeu type palets sont au sol)
+- Un simple regroupement par distance (tous les points à < `ENEMY_ROBOT_RADIUS_CM` les uns des autres) suffit
+- Pas besoin de DBSCAN ou K-means
+
+---
+
+### 4. Formule de conversion polaire → absolu
+
+```
+x_abs = robot.x + (dist_mm / 10.0) * cos((robot.orientation_deg + point.angle_deg) * π/180)
+y_abs = robot.y + (dist_mm / 10.0) * sin((robot.orientation_deg + point.angle_deg) * π/180)
+```
+
+Un point est dans le plateau si : `0 ≤ x_abs ≤ 300` et `0 ≤ y_abs ≤ 200`.
+
+---
+
+### 5. Résumé des fichiers à créer/modifier
+
+| Fichier | Action |
+|---------|--------|
+| Constant.h | Ajouter constantes plateau |
+| Board.hpp | Ajouter `orientation_deg` à Robot, `visitedByEnemy` à Zone |
+| `src/board.cpp` | Corriger `isInsideMap`, ajouter getters/setters |
+| **`includes/LidarProcessing.h`** | **Nouveau** — header du pipeline |
+| **`src/LidarProcessing.cpp`** | **Nouveau** — implémentation du pipeline |
+| `src/vision.cpp` | Intégrer l'appel au pipeline dans `runLoop()` |
+| vision.h | Éventuellement rien à changer |
+
+---

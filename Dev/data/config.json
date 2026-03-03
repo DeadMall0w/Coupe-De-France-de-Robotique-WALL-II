@@ -1,0 +1,40 @@
+{
+    "game": {
+        "duration_ms": 100000,
+        "team": "Orange"
+    },
+    "myRobot": {
+        "position": { "x": 0.0, "y": 0.0 },
+        "size": { "width": 30.0, "length": 30.0 },
+        "orientation_deg": 0.0
+    },
+    "enemyRobot": {
+        "position": { "x": 0.0, "y": 0.0 },
+        "size": { "width": 30.0, "length": 30.0 },
+        "orientation_deg": 0.0
+    },
+    "storageZones": [
+        { "x": 10,  "y": 110,  "width": 10, "height": 20 },
+        { "x": 10,  "y": 30,   "width": 10, "height": 20 },
+        { "x": 100, "y": 10,   "width": 10, "height": 20 },
+        { "x": 105, "y": 70,   "width": 10, "height": 20 },
+        { "x": 175, "y": 72.5, "width": 10, "height": 20 },
+        { "x": 275, "y": 300,  "width": 10, "height": 20 },
+        { "x": 275, "y": 110,  "width": 10, "height": 20 }
+    ],
+    "depositZones": [
+        { "x": 0,   "y": 70,  "width": 20, "height": 20 },
+        { "x": 70,  "y": 70,  "width": 20, "height": 20 },
+        { "x": 115, "y": 135, "width": 20, "height": 20 },
+        { "x": 140, "y": 70,  "width": 20, "height": 20 },
+        { "x": 165, "y": 135, "width": 20, "height": 20 },
+        { "x": 210, "y": 70,  "width": 20, "height": 20 },
+        { "x": 280, "y": 70,  "width": 20, "height": 20 }
+    ],
+    "nidOrange": {
+        "x": 0, "y": 155, "width": 60, "height": 45
+    },
+    "nidBlue": {
+        "x": 240, "y": 155, "width": 60, "height": 45
+    }
+}

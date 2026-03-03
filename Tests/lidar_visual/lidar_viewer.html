@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>WALL-II — Visualisation LIDAR</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        background: #1a1a2e;
+        color: #e0e0e0;
+        font-family: 'Segoe UI', Consolas, monospace;
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    /* ---- Panneau gauche : canvas ---- */
+    #canvasPanel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+    }
+    canvas {
+        border: 2px solid #444;
+        border-radius: 8px;
+        background: #0d0d1a;
+    }
+    #canvasTitle {
+        font-size: 14px;
+        color: #888;
+        margin-bottom: 8px;
+    }
+
+    /* ---- Panneau droit : infos ---- */
+    #infoPanel {
+        width: 340px;
+        background: #16213e;
+        border-left: 2px solid #333;
+        padding: 16px;
+        overflow-y: auto;
+        font-size: 13px;
+    }
+    #infoPanel h2 {
+        color: #4fc3f7;
+        font-size: 16px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid #333;
+        padding-bottom: 6px;
+    }
+    .info-section {
+        margin-bottom: 16px;
+    }
+    .info-section h3 {
+        color: #81c784;
+        font-size: 13px;
+        margin-bottom: 6px;
+    }
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+    }
+    .info-label { color: #aaa; }
+    .info-value { color: #fff; font-weight: bold; }
+    .info-value.detected { color: #ef5350; }
+    .info-value.not-detected { color: #666; }
+    .info-value.visited { color: #ff9800; }
+
+    /* Légende */
+    .legend { margin-top: 12px; }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0;
+        font-size: 12px;
+    }
+    .legend-color {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        flex-shrink: 0;
+    }
+
+    #status {
+        margin-top: 12px;
+        padding: 6px;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 12px;
+    }
+    .status-ok { background: #1b5e20; color: #a5d6a7; }
+    .status-err { background: #b71c1c; color: #ef9a9a; }
+
+    /* Contrôles */
+    .controls {
+        margin-top: 16px;
+        border-top: 1px solid #333;
+        padding-top: 12px;
+    }
+    .controls label {
+        display: block;
+        margin-bottom: 4px;
+        color: #aaa;
+        font-size: 12px;
+    }
+    .controls input[type="checkbox"] {
+        margin-right: 6px;
+    }
+</style>
+</head>
+<body>
+
+<div id="canvasPanel">
+    <div id="canvasTitle">Plateau 300 × 200 cm — Vue de dessus</div>
+    <canvas id="mapCanvas" width="900" height="600"></canvas>
+</div>
+
+<div id="infoPanel">
+    <h2>🤖 WALL-II — LIDAR Debug</h2>
+
+    <div class="info-section">
+        <h3>📡 Scan</h3>
+        <div class="info-row"><span class="info-label">Scan #</span><span class="info-value" id="scanNum">—</span></div>
+        <div class="info-row"><span class="info-label">Points bruts</span><span class="info-value" id="rawPts">—</span></div>
+        <div class="info-row"><span class="info-label">Dans plateau</span><span class="info-value" id="inMapPts">—</span></div>
+        <div class="info-row"><span class="info-label">Filtrés (hors)</span><span class="info-value" id="filteredPts">—</span></div>
+    </div>
+
+    <div class="info-section">
+        <h3>🟦 Notre Robot</h3>
+        <div class="info-row"><span class="info-label">Position X</span><span class="info-value" id="robotX">—</span></div>
+        <div class="info-row"><span class="info-label">Position Y</span><span class="info-value" id="robotY">—</span></div>
+        <div class="info-row"><span class="info-label">Orientation</span><span class="info-value" id="robotOrient">—</span></div>
+    </div>
+
+    <div class="info-section">
+        <h3>🔴 Robot Adverse</h3>
+        <div class="info-row"><span class="info-label">Détecté</span><span class="info-value" id="enemyDetected">—</span></div>
+        <div class="info-row"><span class="info-label">Position X</span><span class="info-value" id="enemyX">—</span></div>
+        <div class="info-row"><span class="info-label">Position Y</span><span class="info-value" id="enemyY">—</span></div>
+        <div class="info-row"><span class="info-label">Taille cluster</span><span class="info-value" id="enemyCluster">—</span></div>
+    </div>
+
+    <div class="info-section">
+        <h3>📦 Zones</h3>
+        <div id="zonesInfo"></div>
+    </div>
+
+    <div class="controls">
+        <h3 style="color:#81c784; margin-bottom:8px;">⚙️ Affichage</h3>
+        <label><input type="checkbox" id="showOutside" checked> Points hors plateau</label>
+        <label><input type="checkbox" id="showBlindSpots" checked> Angles morts</label>
+        <label><input type="checkbox" id="showZones" checked> Zones</label>
+        <label><input type="checkbox" id="showRaw" > Points bruts (polaire)</label>
+    </div>
+
+    <div class="legend">
+        <h3 style="color:#81c784; margin-bottom:8px;">Légende</h3>
+        <div class="legend-item"><div class="legend-color" style="background:#4fc3f7"></div> Notre robot</div>
+        <div class="legend-item"><div class="legend-color" style="background:#00e676"></div> Points dans plateau</div>
+        <div class="legend-item"><div class="legend-color" style="background:rgba(255,255,255,0.15)"></div> Points hors plateau</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ef5350"></div> Robot adverse (estimé)</div>
+        <div class="legend-item"><div class="legend-color" style="background:rgba(255,82,82,0.15)"></div> Angles morts</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div> Zone visitée par ennemi</div>
+        <div class="legend-item"><div class="legend-color" style="background:rgba(76,175,80,0.25)"></div> Zone non visitée</div>
+    </div>
+
+    <div id="status" class="status-err">En attente de données...</div>
+</div>
+
+<script>
+const canvas = document.getElementById("mapCanvas");
+const ctx = canvas.getContext("2d");
+
+// Échelle : canvas 900x600 pour plateau 300x200
+const SCALE = 3; // 1 cm = 3 px
+const CANVAS_W = 900;
+const CANVAS_H = 600;
+
+let data = null;
+let lastScan = -1;
+
+// Convertir cm vers pixels canvas (Y inversé pour avoir 0,0 en bas-gauche)
+function cmToCanvas(x_cm, y_cm) {
+    return [x_cm * SCALE, CANVAS_H - y_cm * SCALE];
+}
+
+function degToRad(deg) {
+    return deg * Math.PI / 180;
+}
+
+// ================================
+// Chargement JSON
+// ================================
+async function loadData() {
+    try {
+        const resp = await fetch("lidar_debug.json?t=" + Date.now());
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        data = await resp.json();
+
+        document.getElementById("status").className = "status-ok";
+        document.getElementById("status").textContent = "✅ Connecté — mise à jour en cours";
+
+        updateInfo();
+        draw();
+    } catch (e) {
+        document.getElementById("status").className = "status-err";
+        document.getElementById("status").textContent = "❌ " + e.message;
+    }
+}
+
+// ================================
+// Mise à jour panneau info
+// ================================
+function updateInfo() {
+    if (!data) return;
+
+    document.getElementById("scanNum").textContent = data.scanNumber;
+    document.getElementById("rawPts").textContent = data.stats.rawPoints;
+    document.getElementById("inMapPts").textContent = data.stats.pointsInMap;
+    document.getElementById("filteredPts").textContent = data.stats.pointsFiltered;
+
+    document.getElementById("robotX").textContent = data.myRobot.x.toFixed(1) + " cm";
+    document.getElementById("robotY").textContent = data.myRobot.y.toFixed(1) + " cm";
+    document.getElementById("robotOrient").textContent = data.myRobot.orientation_deg.toFixed(1) + "°";
+
+    const enemyDet = document.getElementById("enemyDetected");
+    if (data.enemy.detected) {
+        enemyDet.textContent = "OUI";
+        enemyDet.className = "info-value detected";
+        document.getElementById("enemyX").textContent = data.enemy.x.toFixed(1) + " cm";
+        document.getElementById("enemyY").textContent = data.enemy.y.toFixed(1) + " cm";
+        document.getElementById("enemyCluster").textContent = data.enemy.clusterSize + " pts";
+    } else {
+        enemyDet.textContent = "NON";
+        enemyDet.className = "info-value not-detected";
+        document.getElementById("enemyX").textContent = "—";
+        document.getElementById("enemyY").textContent = "—";
+        document.getElementById("enemyCluster").textContent = "—";
+    }
+
+    // Zones
+    let zonesHTML = "";
+    if (data.zones) {
+        data.zones.storage.forEach((z, i) => {
+            const cls = z.visited ? "visited" : "";
+            zonesHTML += `<div class="info-row"><span class="info-label">Stock #${i}</span><span class="info-value ${cls}">${z.visited ? "VISITÉE" : "—"}</span></div>`;
+        });
+        data.zones.deposit.forEach((z, i) => {
+            const cls = z.visited ? "visited" : "";
+            zonesHTML += `<div class="info-row"><span class="info-label">Dépôt #${i}</span><span class="info-value ${cls}">${z.visited ? "VISITÉE" : "—"}</span></div>`;
+        });
+        const nidCls = data.zones.nid.visited ? "visited" : "";
+        zonesHTML += `<div class="info-row"><span class="info-label">Nid</span><span class="info-value ${nidCls}">${data.zones.nid.visited ? "VISITÉE" : "—"}</span></div>`;
+    }
+    document.getElementById("zonesInfo").innerHTML = zonesHTML;
+}
+
+// ================================
+// Dessin
+// ================================
+function draw() {
+    if (!data) return;
+
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Fond du plateau
+    ctx.fillStyle = "#0d1117";
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Grille légère tous les 50 cm
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= 300; x += 50) {
+        const [px] = cmToCanvas(x, 0);
+        ctx.beginPath();
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, CANVAS_H);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= 200; y += 50) {
+        const [, py] = cmToCanvas(0, y);
+        ctx.beginPath();
+        ctx.moveTo(0, py);
+        ctx.lineTo(CANVAS_W, py);
+        ctx.stroke();
+    }
+
+    // Bordure du plateau
+    ctx.strokeStyle = "#555";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Graduations
+    ctx.fillStyle = "#555";
+    ctx.font = "10px monospace";
+    for (let x = 0; x <= 300; x += 50) {
+        const [px] = cmToCanvas(x, 0);
+        ctx.fillText(x + "", px + 2, CANVAS_H - 4);
+    }
+    for (let y = 0; y <= 200; y += 50) {
+        const [, py] = cmToCanvas(0, y);
+        ctx.fillText(y + "", 4, py - 4);
+    }
+
+    // ---- Zones ----
+    if (document.getElementById("showZones").checked && data.zones) {
+        drawZones(data.zones.storage, "storage");
+        drawZones(data.zones.deposit, "deposit");
+        drawZone(data.zones.nid, "nid");
+    }
+
+    // ---- Angles morts (secteurs depuis la position du robot) ----
+    if (document.getElementById("showBlindSpots").checked) {
+        drawBlindSpots();
+    }
+
+    // ---- Points hors plateau ----
+    if (document.getElementById("showOutside").checked && data.outsidePoints) {
+        ctx.fillStyle = "rgba(255,255,255,0.1)";
+        for (const p of data.outsidePoints) {
+            const [px, py] = cmToCanvas(p.x, p.y);
+            // Clamper pour ne pas dessiner trop loin du canvas
+            if (px >= -100 && px <= CANVAS_W + 100 && py >= -100 && py <= CANVAS_H + 100) {
+                ctx.fillRect(px - 1, py - 1, 2, 2);
+            }
+        }
+    }
+
+    // ---- Points dans le plateau ----
+    ctx.fillStyle = "#00e676";
+    for (const p of data.filteredPoints) {
+        const [px, py] = cmToCanvas(p.x, p.y);
+        ctx.beginPath();
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // ---- Robot adverse ----
+    if (data.enemy.detected) {
+        const [ex, ey] = cmToCanvas(data.enemy.x, data.enemy.y);
+
+        // Cercle rouge semi-transparent (rayon estimé du robot)
+        ctx.fillStyle = "rgba(239, 83, 80, 0.2)";
+        ctx.beginPath();
+        ctx.arc(ex, ey, 25 * SCALE, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Point rouge central
+        ctx.fillStyle = "#ef5350";
+        ctx.beginPath();
+        ctx.arc(ex, ey, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Croix
+        ctx.strokeStyle = "#ef5350";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(ex - 10, ey); ctx.lineTo(ex + 10, ey);
+        ctx.moveTo(ex, ey - 10); ctx.lineTo(ex, ey + 10);
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = "#ef5350";
+        ctx.font = "bold 12px monospace";
+        ctx.fillText("ENNEMI", ex + 12, ey - 8);
+        ctx.font = "10px monospace";
+        ctx.fillText(`(${data.enemy.x.toFixed(0)}, ${data.enemy.y.toFixed(0)})`, ex + 12, ey + 6);
+    }
+
+    // ---- Notre robot ----
+    drawRobot(data.myRobot.x, data.myRobot.y, data.myRobot.orientation_deg);
+}
+
+function drawRobot(x_cm, y_cm, orient_deg) {
+    const [rx, ry] = cmToCanvas(x_cm, y_cm);
+    const size = 12;
+
+    // Orientation : le canvas a Y inversé, donc on inverse l'angle
+    const angle = -degToRad(orient_deg);
+
+    ctx.save();
+    ctx.translate(rx, ry);
+    ctx.rotate(angle);
+
+    // Triangle (pointe vers l'avant = droite dans l'espace non-rotaté)
+    ctx.fillStyle = "#4fc3f7";
+    ctx.beginPath();
+    ctx.moveTo(size * 1.5, 0);       // pointe avant
+    ctx.lineTo(-size, -size);         // arrière gauche
+    ctx.lineTo(-size, size);          // arrière droit
+    ctx.closePath();
+    ctx.fill();
+
+    // Contour
+    ctx.strokeStyle = "#0288d1";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Label
+    ctx.fillStyle = "#4fc3f7";
+    ctx.font = "bold 11px monospace";
+    ctx.fillText("MON ROBOT", rx + 16, ry - 6);
+    ctx.font = "10px monospace";
+    ctx.fillText(`(${x_cm.toFixed(0)}, ${y_cm.toFixed(0)}) ${orient_deg.toFixed(0)}°`, rx + 16, ry + 8);
+}
+
+function drawBlindSpots() {
+    if (!data || !data.blindSpots) return;
+
+    const [rx, ry] = cmToCanvas(data.myRobot.x, data.myRobot.y);
+    const radius = 800; // assez grand pour couvrir le canvas
+
+    ctx.fillStyle = "rgba(239, 83, 80, 0.08)";
+
+    for (const [startDeg, endDeg] of data.blindSpots) {
+        // Convertir en angle canvas (Y inversé)
+        const absStart = data.myRobot.orientation_deg + startDeg;
+        const absEnd = data.myRobot.orientation_deg + endDeg;
+
+        const startRad = -degToRad(absStart);
+        const endRad = -degToRad(absEnd);
+
+        ctx.beginPath();
+        ctx.moveTo(rx, ry);
+        ctx.arc(rx, ry, radius, startRad, endRad, true); // true = counterclockwise pour Y inversé
+        ctx.closePath();
+        ctx.fill();
+
+        // Bordure
+        ctx.strokeStyle = "rgba(239, 83, 80, 0.2)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+}
+
+function drawZones(zones, type) {
+    for (const z of zones) {
+        drawZone(z, type);
+    }
+}
+
+function drawZone(z, type) {
+    const [zx, zy] = cmToCanvas(z.x, z.y + z.h); // +h car Y inversé
+    const w = z.w * SCALE;
+    const h = z.h * SCALE;
+
+    if (z.visited) {
+        ctx.fillStyle = "rgba(255, 152, 0, 0.25)";
+        ctx.strokeStyle = "#ff9800";
+    } else {
+        ctx.fillStyle = type === "nid" ? "rgba(156, 39, 176, 0.15)" : "rgba(76, 175, 80, 0.12)";
+        ctx.strokeStyle = type === "nid" ? "#9c27b0" : "rgba(76, 175, 80, 0.4)";
+    }
+
+    ctx.lineWidth = 1;
+    ctx.fillRect(zx, zy, w, h);
+    ctx.strokeRect(zx, zy, w, h);
+}
+
+// ================================
+// Boucle de rafraîchissement
+// ================================
+setInterval(loadData, 100);
+loadData();
+</script>
+</body>
+</html>
