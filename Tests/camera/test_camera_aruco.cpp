@@ -1,25 +1,24 @@
-// Test standalone du module caméra
-// Compile : g++ -std=c++17 -O2 test_camera.cpp ../../Dev/src/CameraProcessing.cpp \
-//           -I../../Dev/includes -I../../Dev/lib/include $(pkg-config --cflags --libs opencv4) -o test_camera
+// Test standalone — détection ArUco via CameraProcessing
 //
 // Usage :
-//   ./test_camera                      → logs SSH console (Ctrl+C pour quitter)
-//   ./test_camera --serve 8080         → serveur MJPEG HTTP sur :8080
-//       Côté client : ffplay http://IP:8080   ou   vlc http://IP:8080
-//   ./test_camera --stream             → MJPEG brut sur stdout
-//       Côté client : ssh pi@robot "./test_camera --stream" | ffplay -f mjpeg -i -
-//   ./test_camera v4l2                 → forcer V4L2 (/dev/video0)
-//   ./test_camera --display            → fenêtre OpenCV locale (si DISPLAY dispo)
+//   ./test_camera_aruco                    → logs console SSH (Ctrl+C pour quitter)
+//   ./test_camera_aruco --serve 8080       → serveur MJPEG HTTP sur :8080
+//       Client : ffplay http://IP:8080   ou   vlc http://IP:8080
+//   ./test_camera_aruco --stream           → MJPEG brut sur stdout
+//       Client : ssh pi@robot "./test_camera_aruco --stream" | ffplay -f mjpeg -i -
+//   ./test_camera_aruco v4l2               → forcer V4L2 (/dev/video1)
+//   ./test_camera_aruco --display          → fenêtre OpenCV locale (si DISPLAY dispo)
 
 #include <iostream>
 #include <iomanip>
 #include <chrono>
 #include <string>
+#include <vector>
+#include <algorithm>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
 
-// POSIX sockets (pour le serveur MJPEG)
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -43,8 +42,8 @@ static void sigHandler(int) { g_running = false; }
 // -----------------------------------------------
 // Helpers texte
 // -----------------------------------------------
-static const char* orderToString(CameraOrder order) {
-    switch (order) {
+static const char* orderToString(CameraOrder o) {
+    switch (o) {
         case CameraOrder::Recherche:         return "RECHERCHE      ";
         case CameraOrder::Avancer:           return "AVANCER        ";
         case CameraOrder::Reculer:           return "RECULER        ";
@@ -65,9 +64,7 @@ static const char* colorToString(DetectedColor c) {
 }
 
 // -----------------------------------------------
-// Serveur MJPEG HTTP minimaliste
-//   Gère un seul client à la fois (suffisant pour debug).
-//   Retourne un fd client (>= 0) ou -1 si pas de nouveau client.
+// Serveur MJPEG HTTP minimaliste (un seul client)
 // -----------------------------------------------
 static int mjpeg_server_fd = -1;
 static int mjpeg_client_fd = -1;
@@ -75,65 +72,48 @@ static int mjpeg_client_fd = -1;
 static bool mjpeg_server_init(int port) {
     mjpeg_server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (mjpeg_server_fd < 0) return false;
-
     int opt = 1;
     setsockopt(mjpeg_server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    fcntl(mjpeg_server_fd, F_SETFL, O_NONBLOCK); // accept non-bloquant
-
+    fcntl(mjpeg_server_fd, F_SETFL, O_NONBLOCK);
     sockaddr_in addr{};
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port        = htons(port);
-
     if (bind(mjpeg_server_fd, (sockaddr*)&addr, sizeof(addr)) < 0) return false;
     listen(mjpeg_server_fd, 1);
     return true;
 }
 
-// Accepte un nouveau client (non-bloquant). Ferme l'ancien si nécessaire.
 static void mjpeg_accept_client() {
     sockaddr_in cli{};
     socklen_t len = sizeof(cli);
     int fd = accept(mjpeg_server_fd, (sockaddr*)&cli, &len);
-    if (fd < 0) return; // pas de nouveau client
-
+    if (fd < 0) return;
     if (mjpeg_client_fd >= 0) close(mjpeg_client_fd);
     mjpeg_client_fd = fd;
-
-    // En-têtes HTTP MJPEG
     const char* hdr =
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n"
         "Cache-Control: no-cache\r\n"
-        "Connection: close\r\n"
-        "\r\n";
+        "Connection: close\r\n\r\n";
     send(mjpeg_client_fd, hdr, strlen(hdr), MSG_NOSIGNAL);
-
     char ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &cli.sin_addr, ip, sizeof(ip));
-    cerr << GREEN << "[Stream] Client connecté : " << ip << RESET << endl;
+    cerr << GREEN << "[Stream] Client connecte : " << ip << RESET << endl;
 }
 
-// Envoie une frame JPEG au client connecté. Retourne false si déconnecté.
 static bool mjpeg_send_frame(const vector<uchar>& jpg) {
     if (mjpeg_client_fd < 0) return false;
-
-    char part_hdr[128];
-    int hlen = snprintf(part_hdr, sizeof(part_hdr),
-        "--frame\r\n"
-        "Content-Type: image/jpeg\r\n"
-        "Content-Length: %zu\r\n"
-        "\r\n", jpg.size());
-
-    if (send(mjpeg_client_fd, part_hdr, hlen, MSG_NOSIGNAL) < 0) goto disconnect;
-    if (send(mjpeg_client_fd, jpg.data(), jpg.size(), MSG_NOSIGNAL) < 0) goto disconnect;
-    if (send(mjpeg_client_fd, "\r\n", 2, MSG_NOSIGNAL) < 0) goto disconnect;
+    char hdr[128];
+    int hlen = snprintf(hdr, sizeof(hdr),
+        "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %zu\r\n\r\n", jpg.size());
+    if (send(mjpeg_client_fd, hdr,        hlen,       MSG_NOSIGNAL) < 0) goto dc;
+    if (send(mjpeg_client_fd, jpg.data(), jpg.size(), MSG_NOSIGNAL) < 0) goto dc;
+    if (send(mjpeg_client_fd, "\r\n",     2,          MSG_NOSIGNAL) < 0) goto dc;
     return true;
-
-disconnect:
-    cerr << YELLOW << "[Stream] Client déconnecté." << RESET << endl;
-    close(mjpeg_client_fd);
-    mjpeg_client_fd = -1;
+dc:
+    cerr << YELLOW << "[Stream] Client deconnecte." << RESET << endl;
+    close(mjpeg_client_fd); mjpeg_client_fd = -1;
     return false;
 }
 
@@ -143,7 +123,7 @@ disconnect:
 int main(int argc, char* argv[]) {
     signal(SIGINT,  sigHandler);
     signal(SIGTERM, sigHandler);
-    signal(SIGPIPE, SIG_IGN); // évite crash si client coupe la connexion
+    signal(SIGPIPE, SIG_IGN);
 
     bool useGstreamer = true;
     bool showDisplay  = false;
@@ -155,137 +135,137 @@ int main(int argc, char* argv[]) {
         if (arg == "v4l2")      useGstreamer = false;
         if (arg == "--display") showDisplay  = true;
         if (arg == "--stream")  streamStdout = true;
-        if (arg == "--serve" && i + 1 < argc) {
-            servePort = atoi(argv[++i]);
-        }
+        if (arg == "--serve" && i + 1 < argc) servePort = atoi(argv[++i]);
     }
 
     if (showDisplay) {
-        bool hasDisplay = (getenv("DISPLAY") != nullptr)
-                       || (getenv("WAYLAND_DISPLAY") != nullptr);
+        bool hasDisplay = getenv("DISPLAY") || getenv("WAYLAND_DISPLAY");
         if (!hasDisplay) {
-            cerr << YELLOW << "[Display] Pas de DISPLAY/WAYLAND, --display ignoré." << RESET << endl;
+            cerr << YELLOW << "[Display] Pas de DISPLAY/WAYLAND, --display ignore." << RESET << endl;
             showDisplay = false;
         }
     }
 
-    // En mode stream/serve, les logs vont sur stderr pour ne pas polluer stdout
     bool logToStderr = streamStdout;
-
     auto log = [&](const string& msg) {
         if (logToStderr) cerr << msg << endl;
         else             cout << msg << endl;
     };
 
-    log(string(BOLDBLUE) + "=== WALL-II Camera ===" + RESET);
-    log(string(YELLOW) + "Mode  : " + (useGstreamer ? "GStreamer" : "V4L2") + RESET);
+    log(string(BOLDBLUE) + "=== WALL-II Camera ArUco ===" + RESET);
+    log(string(YELLOW) + "Mode : " + (useGstreamer ? "GStreamer" : "V4L2") + RESET);
 
     if (servePort > 0) {
         if (!mjpeg_server_init(servePort)) {
             cerr << RED << "Impossible d'ouvrir le port " << servePort << RESET << endl;
             return 1;
         }
-        log(string(GREEN) + "Serveur MJPEG : http://<IP_RPi>:" + to_string(servePort) + RESET);
-        log(string(YELLOW) + "  → ffplay http://<IP_RPi>:" + to_string(servePort) + RESET);
-        log(string(YELLOW) + "  → vlc    http://<IP_RPi>:" + to_string(servePort) + RESET);
+        log(string(GREEN)  + "Serveur MJPEG : http://<IP>:" + to_string(servePort) + RESET);
+        log(string(YELLOW) + "  -> ffplay http://<IP>:" + to_string(servePort) + RESET);
     } else if (streamStdout) {
-        log(string(GREEN) + "Stream MJPEG sur stdout (pipe SSH)" + RESET);
-        log(string(YELLOW) + "  → ssh pi@robot './test_camera --stream' | ffplay -f mjpeg -i -" + RESET);
+        log(string(GREEN)  + "Stream MJPEG sur stdout (pipe SSH)" + RESET);
+        log(string(YELLOW) + "  -> ssh pi@robot './test_camera_aruco --stream' | ffplay -f mjpeg -i -" + RESET);
     }
 
-    CameraProcessing camProc;
-    bool ok = useGstreamer ? camProc.init(-1) : camProc.init(1);
-    if (!ok) {
-        cerr << RED << "Échec ouverture caméra." << RESET << endl;
+    CameraProcessing cam;
+    if (!(useGstreamer ? cam.init(-1) : cam.init(1))) {
+        cerr << RED << "Echec ouverture camera." << RESET << endl;
         return 1;
     }
 
-    // Le debug peuple toujours debugFrame (nécessaire pour stream/serve)
-    bool needDebugFrame = showDisplay || streamStdout || (servePort > 0);
-    camProc.setDebug(needDebugFrame);
+    bool needDebug = showDisplay || streamStdout || (servePort > 0);
+    cam.setDebug(needDebug);
 
-    log(string(GREEN) + "Caméra OK. Ctrl+C pour quitter." + RESET);
-    if (servePort < 0 && !streamStdout)
-        cerr << endl;
+    log(string(GREEN) + "Camera OK. Ctrl+C pour quitter." + RESET);
 
-    int  frameCount = 0;
-    int  detCount   = 0;
+    int  frameCount = 0, detCount = 0;
     auto startTime  = steady_clock::now();
-
-    constexpr int PRINT_EVERY   = 5;
-    constexpr int NEWLINE_EVERY = 30;
+    constexpr int PRINT_EVERY = 5, NEWLINE_EVERY = 30;
 
     while (g_running) {
         auto t1 = steady_clock::now();
-        CameraResult result = camProc.processNextFrame();
+        CameraResult result = cam.processNextFrame();
         auto t2 = steady_clock::now();
 
         double ms = duration_cast<microseconds>(t2 - t1).count() / 1000.0;
         frameCount++;
         if (result.objectDetected) detCount++;
 
-        // --- Encode la frame annotée en JPEG ---
+        // Encode la frame annotee en JPEG
         vector<uchar> jpegBuf;
-        if (needDebugFrame) {
-            cv::Mat dbg = camProc.getDebugFrame();
+        if (needDebug) {
+            cv::Mat dbg = cam.getDebugFrame();
             if (!dbg.empty()) {
-                vector<int> params = { cv::IMWRITE_JPEG_QUALITY, 80 };
-                cv::imencode(".jpg", dbg, jpegBuf, params);
+                vector<int> p = { cv::IMWRITE_JPEG_QUALITY, 80 };
+                cv::imencode(".jpg", dbg, jpegBuf, p);
             }
         }
 
-        // --- Fenêtre locale ---
+        // Fenetre locale
         if (showDisplay && !jpegBuf.empty()) {
-            cv::Mat dbg = camProc.getDebugFrame();
-            cv::imshow("WALL-II Camera", dbg);
+            cv::imshow("WALL-II Camera ArUco", cam.getDebugFrame());
             int key = cv::waitKey(1) & 0xFF;
             if (key == 'q' || key == 27) break;
         }
 
-        // --- Stream MJPEG sur stdout ---
+        // Stream stdout
         if (streamStdout && !jpegBuf.empty()) {
-            // Écriture directe sur fd 1 (stdout), sans passer par cout
             fwrite(jpegBuf.data(), 1, jpegBuf.size(), stdout);
             fflush(stdout);
         }
 
-        // --- Serveur MJPEG HTTP ---
+        // Serveur HTTP
         if (servePort > 0) {
-            mjpeg_accept_client(); // non-bloquant, accepte si quelqu'un attend
-            if (!jpegBuf.empty()) {
-                mjpeg_send_frame(jpegBuf);
-            }
+            mjpeg_accept_client();
+            if (!jpegBuf.empty()) mjpeg_send_frame(jpegBuf);
         }
 
-        // --- Logs console SSH ---
+        // Logs console
         if (frameCount % PRINT_EVERY == 0) {
             double elapsed = duration_cast<milliseconds>(t2 - startTime).count() / 1000.0;
-            double fps     = (elapsed > 0.0) ? frameCount / elapsed : 0.0;
-            double detRate = (frameCount > 0) ? 100.0 * detCount / frameCount : 0.0;
+            double fps     = elapsed > 0 ? frameCount / elapsed : 0.0;
+            double detRate = frameCount > 0 ? 100.0 * detCount / frameCount : 0.0;
 
+            const DetectedCrate* best = result.closest();
+
+            // Ligne de résumé : ordre global groupe + détail par tasseau
             char buf[512];
             if (result.objectDetected && !result.crates.empty()) {
-                snprintf(buf, sizeof(buf),
-                    "[%5d] %s %dt | GrpZ:%6.1f X:%+6.1f cap:%+5.1f  |  %5.1fms  %4.1ffps  det:%4.1f%%",
+                int off = snprintf(buf, sizeof(buf),
+                    "[%5d] %s %dt | GrpZ:%4.0f X:%+4.0f cap:%+3.0f |",
                     frameCount, orderToString(result.groupOrder),
                     (int)result.crates.size(),
-                    result.groupCenterZ, result.groupCenterX, result.groupAngle,
+                    result.groupCenterZ, result.groupCenterX, result.groupAngle);
+
+                // Détail de chaque tasseau (triés par X, gauche→droite)
+                vector<const DetectedCrate*> sorted;
+                for (const auto& c : result.crates) sorted.push_back(&c);
+                sort(sorted.begin(), sorted.end(),
+                     [](const DetectedCrate* a, const DetectedCrate* b){ return a->smoothX < b->smoothX; });
+
+                for (const auto* c : sorted) {
+                    const char* col_c = (c->color == DetectedColor::Blue) ? "B" : "J";
+                    off += snprintf(buf + off, sizeof(buf) - off,
+                        " %s Z:%4.0f X:%+4.0f |",
+                        col_c, c->smoothZ, c->smoothX);
+                }
+                snprintf(buf + off, sizeof(buf) - off,
+                    " %5.1fms %4.1ffps det:%4.1f%%",
                     ms, fps, detRate);
             } else {
                 snprintf(buf, sizeof(buf),
-                    "[%5d] %-15s                                               |  %5.1fms  %4.1ffps  det:%4.1f%%",
-                    frameCount, "RECHERCHE...", ms, fps, detRate);
+                    "[%5d] RECHERCHE...                                         |  %5.1fms  %4.1ffps  det:%4.1f%%",
+                    frameCount, ms, fps, detRate);
             }
 
             const char* col  = result.objectDetected ? GREEN : YELLOW;
-            const char* bold = (result.objectDetected && result.groupOrder == CameraOrder::Parfait) ? BOLDGREEN : col;
+            const char* bold = (result.groupOrder == CameraOrder::Parfait) ? BOLDGREEN : col;
 
-            bool doNewline = (frameCount % NEWLINE_EVERY == 0);
-            if (doNewline) {
+            if (frameCount % NEWLINE_EVERY == 0) {
                 double ts = duration_cast<milliseconds>(t2 - startTime).count() / 1000.0;
-                char tsbuf[256];
-                snprintf(tsbuf, sizeof(tsbuf), "[+%6.1fs] %s", ts, buf);
-                cerr << bold << tsbuf << RESET << "\n";
+                char ts_buf[280];
+                snprintf(ts_buf, sizeof(ts_buf), "[+%6.1fs] %s", ts, buf);
+                cerr << bold << ts_buf << RESET << "\n";
             } else {
                 cerr << "\r" << col << buf << RESET << "   ";
             }
@@ -293,21 +273,21 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    cerr << "\n" << YELLOW << "Arrêt." << RESET << "\n";
+    cerr << "\n" << YELLOW << "Arret." << RESET << "\n";
 
     if (showDisplay) cv::destroyAllWindows();
     if (mjpeg_client_fd >= 0) close(mjpeg_client_fd);
     if (mjpeg_server_fd >= 0) close(mjpeg_server_fd);
-    camProc.release();
+    cam.release();
 
     double elapsed = duration_cast<milliseconds>(steady_clock::now() - startTime).count() / 1000.0;
-    cerr << BOLDBLUE << "\n=== Résumé ===" << RESET << "\n"
+    cerr << BOLDBLUE << "\n=== Resume ===" << RESET << "\n"
          << "  Frames  : " << frameCount << "\n"
-         << "  Détect. : " << detCount
+         << "  Detect. : " << detCount
          << " (" << fixed << setprecision(1)
-         << (frameCount > 0 ? 100.0*detCount/frameCount : 0.0) << "%)\n"
-         << "  Durée   : " << elapsed << "s\n"
-         << "  FPS moy.: " << (elapsed > 0 ? frameCount/elapsed : 0.0) << "\n";
+         << (frameCount > 0 ? 100.0 * detCount / frameCount : 0.0) << "%)\n"
+         << "  Duree   : " << elapsed << "s\n"
+         << "  FPS moy.: " << (elapsed > 0 ? frameCount / elapsed : 0.0) << "\n";
 
     return 0;
 }

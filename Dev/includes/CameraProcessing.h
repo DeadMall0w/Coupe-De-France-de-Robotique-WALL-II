@@ -2,50 +2,85 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <opencv2/opencv.hpp>
+#include <opencv2/objdetect/aruco_detector.hpp>
 
 // ================================
 // Ordres caméra vers Teensy
 // ================================
 
-// Enum représentant les ordres déduits par la caméra
 enum class CameraOrder {
-    Recherche,           // aucun objet détecté, en recherche
-    Avancer,             // robot trop loin de la cible → avancer
-    Reculer,             // robot trop proche → reculer
-    Gauche,              // objet à droite du centre → décaler à gauche
-    Droite,              // objet à gauche du centre → décaler à droite
-    TourneHoraire,       // pivoter dans le sens horaire pour s'aligner avec le tasseau
-    TourneAntiHoraire,   // pivoter dans le sens anti-horaire
-    Parfait              // distance, centrage et alignement OK → prêt pour la prise
+    Recherche,           // aucun tag détecté
+    Avancer,             // trop loin de la cible → avancer
+    Reculer,             // trop proche → reculer
+    Gauche,              // caisse décalée à droite → déplacer à gauche
+    Droite,              // caisse décalée à gauche → déplacer à droite
+    TourneHoraire,       // cap positif → pivoter horaire
+    TourneAntiHoraire,   // cap négatif → pivoter anti-horaire
+    Parfait              // distance, centrage et alignement OK
 };
 
-// Couleur détectée
+// Zone identifiée par le tag ArUco
 enum class DetectedColor {
     None,
-    Yellow,
-    Blue
+    Yellow,   // tag ID 47
+    Blue      // tag ID 36
 };
 
-// Résultat complet du traitement caméra
+// ================================
+// Infos d'une caisse détectée
+// ================================
+struct DetectedCrate {
+    int           tagId          = -1;
+    DetectedColor color          = DetectedColor::None;
+    CameraOrder   order          = CameraOrder::Recherche;
+    double        smoothZ        = 0.0;   // distance avant lissée (mm)
+    double        smoothX        = 0.0;   // décalage latéral lissé (mm, + = droite)
+    double        smoothAngle    = 0.0;   // cap de la caisse lissé (degrés)
+    double        smoothRatio    = 0.0;   // taille tag en pixels / TAG_SIZE_MM (échelle)
+};
+
+// Résultat complet du traitement caméra (multi-tasseaux)
 struct CameraResult {
-    CameraOrder order = CameraOrder::Recherche;
-    bool objectDetected = false;
-    DetectedColor color = DetectedColor::None;  // couleur du tasseau détecté
-    double smoothZ  = 0.0;      // distance lissée (cm) — calculée via dimensions connues du tasseau
-    double smoothX  = 0.0;      // décalage latéral lissé (cm)
-    double smoothAngle = 0.0;   // angle du tasseau lissé (degrés, 0 = vertical)
-    double smoothRatio = 0.0;   // ratio long/court lissé
+    bool                       objectDetected = false;   // au moins un tasseau détecté
+    std::vector<DetectedCrate> crates;                   // tous les tasseaux détectés
+
+    // Ordre global basé sur le CENTRE DU GROUPE (pour approcher le bloc de 4 tasseaux)
+    CameraOrder groupOrder    = CameraOrder::Recherche;
+    double      groupCenterZ  = 0.0;   // distance moyenne du groupe (mm)
+    double      groupCenterX  = 0.0;   // décalage latéral moyen du groupe (mm)
+    double      groupAngle    = 0.0;   // orientation moyenne du groupe (degrés)
+
+    // Accès rapide : le tasseau le plus proche (plus grand tag en pixels)
+    // Retourne nullptr si aucun tasseau détecté
+    const DetectedCrate* closest() const {
+        if (crates.empty()) return nullptr;
+        const DetectedCrate* best = &crates[0];
+        for (const auto& c : crates)
+            if (c.smoothRatio > best->smoothRatio) best = &c;
+        return best;
+    }
+
+    // Nombre de tasseaux d'une couleur donnée
+    int countByColor(DetectedColor col) const {
+        int n = 0;
+        for (const auto& c : crates) if (c.color == col) ++n;
+        return n;
+    }
 };
 
 // ================================
 // Classe de traitement caméra
 // ================================
-// Détecte des tasseaux colorés (15×4×3 cm, jaune ou bleu)
-// en exploitant leurs dimensions connues pour :
-//   - estimer la distance (taille réelle → pixels)
-//   - filtrer les faux positifs (ratio d'aspect attendu)
-//   - déterminer l'orientation (minAreaRect)
+// Détecte les caisses de noisettes (150×50×30 mm) par tags ArUco 4×4 :
+//   - ID 36 → zone bleue
+//   - ID 47 → zone jaune
+// Supporte la détection simultanée de plusieurs caisses (jusqu'à 4+).
+// Modèle géométrique plan sagittal :
+//   α = pitch + atan((py − cy) / focal)
+//   Z = (h_cam − h_tag) / tan(α)          [mm]
+//   X = Z * (px − cx) / focal             [mm]
 
 class CameraProcessing {
 public:
@@ -57,36 +92,31 @@ public:
     // cameraId >= 0 → V4L2 (/dev/videoX)
     bool init(int cameraId = -1);
 
-    // Libère la caméra
     void release();
-
-    // Traite une frame et retourne le résultat (ordre + données)
     CameraResult processNextFrame();
-
-    // Vérifie si la caméra est ouverte
     bool isOpened() const;
 
-    // Active/désactive le mode debug visuel (dessine les boîtes sur la frame)
-    void setDebug(bool enabled);
-
-    // Récupère la dernière frame annotée (vide si debug désactivé)
+    void    setDebug(bool enabled);
     cv::Mat getDebugFrame() const;
 
 private:
     cv::VideoCapture cap;
 
-    // Mode debug visuel
-    bool debugEnabled = false;
+    // Détecteur ArUco
+    cv::aruco::Dictionary        arucoDict;
+    cv::aruco::DetectorParameters arucoParams;
+    cv::aruco::ArucoDetector     detector;
+
+    bool    debugEnabled = false;
     cv::Mat debugFrame;
 
-    // Éléments structurants pré-calculés
-    cv::Mat kernelOpen;
-    cv::Mat kernelClose;
-
-    // État du lissage EMA
-    double smooth_z     = 0.0;
-    double smooth_x     = 0.0;
-    double smooth_r     = 0.0;
-    double smooth_angle = 0.0;
-    bool firstDetection = true;
+    // État du lissage EMA par tag ID (permet de suivre chaque caisse indépendamment)
+    struct EmaState {
+        double z     = 0.0;
+        double x     = 0.0;
+        double r     = 0.0;
+        double angle = 0.0;
+        bool   first = true;
+    };
+    std::map<int, EmaState> emaStates;
 };

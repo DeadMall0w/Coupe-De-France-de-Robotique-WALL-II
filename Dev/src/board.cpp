@@ -265,7 +265,7 @@ CameraResult Board::getCameraResult() {
 
 CameraOrder Board::getCameraOrder() {
     std::lock_guard<std::mutex> lock(mtx);
-    return cameraResult.order;
+    return cameraResult.groupOrder;
 }
 
 void Board::setCameraResult(const CameraResult& result) {

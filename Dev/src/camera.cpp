@@ -58,13 +58,12 @@ void camera(std::atomic<bool>* stop) {
 
         // Log de debug
         if (result.objectDetected) {
-            std::cout << CYAN 
-                << "[Camera] " << colorToString(result.color)
-                << " | Ordre: " << orderToString(result.order)
-                << " | Z:" << result.smoothZ 
-                << " X:" << result.smoothX 
-                << " Ang:" << result.smoothAngle
-                << " R:" << result.smoothRatio
+            std::cout << CYAN
+                << "[Camera] " << result.crates.size() << " tasseau(x) | "
+                << orderToString(result.groupOrder)
+                << " | Grp Z:" << (int)result.groupCenterZ
+                << " X:" << (int)result.groupCenterX
+                << " cap:" << (int)result.groupAngle
                 << RESET << std::endl;
         }
 
