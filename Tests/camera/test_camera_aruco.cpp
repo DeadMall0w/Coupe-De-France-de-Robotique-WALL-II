@@ -3,7 +3,7 @@
 // Usage :
 //   ./test_camera_aruco                    → logs console SSH (Ctrl+C pour quitter)
 //   ./test_camera_aruco --serve 8080       → serveur MJPEG HTTP sur :8080
-//       Client : ffplay http://IP:8080   ou   vlc http://IP:8080
+//       Client : ffplay http://10.14.43.60:8080   ou   vlc http://IP:8080
 //   ./test_camera_aruco --stream           → MJPEG brut sur stdout
 //       Client : ssh pi@robot "./test_camera_aruco --stream" | ffplay -f mjpeg -i -
 //   ./test_camera_aruco v4l2               → forcer V4L2 (/dev/video1)
