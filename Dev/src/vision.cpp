@@ -1,6 +1,5 @@
 // script responsable de toute la gestion de la vision (lancé dans un thread séparé)
 
-
 // includes
 #include <iostream>
 #include <chrono>
@@ -18,8 +17,7 @@
 using namespace std::chrono;
 
 // headers
-void runLoop(std::atomic<bool>* stop);
-
+void runLoop(std::atomic<bool> *stop);
 
 std::unique_ptr<Slamtec> lidarTop;
 
@@ -43,15 +41,17 @@ void vision(std::atomic<bool>* stop){
     }
 }
 
+void runLoop(std::atomic<bool> *stop)
+{
+    Board &board = Board::instance();
 
-void runLoop(std::atomic<bool>* stop) {
-    Board& board = Board::instance();
-
-    while (!*stop) {
+    while (!*stop)
+    {
         std::vector<ScanPoint> points;
 
         // grabData est bloquant, ne renvoie les points que quand il y à des nouveaux
-        if (lidarTop->grabData(points)) {
+        if (lidarTop->grabData(points))
+        {
             // Export CSV pour debug (peut être désactivé en production)
             LidarUtils::writeScanToCSV(points);
 
@@ -63,17 +63,17 @@ void runLoop(std::atomic<bool>* stop) {
             LidarProcessingResult result = LidarProcessing::processScan(
                 points,
                 myRobot.position,
-                orientation
-            );
+                orientation);
 
             // Log de debug
-            if (result.enemyDetected) {
-                std::cout << YELLOW 
-                    << "[LIDAR] Ennemi détecté à (" 
-                    << result.enemyPosition.x_cm << ", " 
-                    << result.enemyPosition.y_cm << ") cm"
-                    << " | cluster: " << result.clusterSize << " pts"
-                    << RESET << std::endl;
+            if (result.enemyDetected)
+            {
+                std::cout << YELLOW
+                          << "[LIDAR] Ennemi détecté à ("
+                          << result.enemyPosition.x_cm << ", "
+                          << result.enemyPosition.y_cm << ") cm"
+                          << " | cluster: " << result.clusterSize << " pts"
+                          << RESET << std::endl;
             }
         }
     }

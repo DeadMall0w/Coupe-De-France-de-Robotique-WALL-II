@@ -175,6 +175,7 @@ int main(int argc, char* argv[]) {
 
     bool needDebug = showDisplay || streamStdout || (servePort > 0);
     cam.setDebug(needDebug);
+    cam.setDebugFlip(true);
 
     log(string(GREEN) + "Camera OK. Ctrl+C pour quitter." + RESET);
 
@@ -203,7 +204,10 @@ int main(int argc, char* argv[]) {
 
         // Fenetre locale
         if (showDisplay && !jpegBuf.empty()) {
-            cv::imshow("WALL-II Camera ArUco", cam.getDebugFrame());
+            cv::Mat dbg = cam.getDebugFrame();
+            if (!dbg.empty()) {
+                cv::imshow("WALL-II Camera ArUco", dbg);
+            }
             int key = cv::waitKey(1) & 0xFF;
             if (key == 'q' || key == 27) break;
         }

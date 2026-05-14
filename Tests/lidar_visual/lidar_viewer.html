@@ -183,6 +183,7 @@ const CANVAS_H = 600;
 
 let data = null;
 let lastScan = -1;
+const CMD_ENDPOINT = "/cmd";
 
 // Convertir cm vers pixels canvas (Y inversé pour avoir 0,0 en bas-gauche)
 function cmToCanvas(x_cm, y_cm) {
@@ -210,6 +211,34 @@ async function loadData() {
     } catch (e) {
         document.getElementById("status").className = "status-err";
         document.getElementById("status").textContent = "❌ " + e.message;
+    }
+}
+
+async function sendGoToCommand(xCm, yCm) {
+    try {
+        const payload = {
+            id: Date.now(),
+            x: xCm,
+            y: yCm
+        };
+
+        const resp = await fetch(CMD_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+            throw new Error("HTTP " + resp.status);
+        }
+
+        const status = document.getElementById("status");
+        status.className = "status-ok";
+        status.textContent = `🎯 Commande envoyée: g ${xCm.toFixed(1)} ${yCm.toFixed(1)}`;
+    } catch (e) {
+        const status = document.getElementById("status");
+        status.className = "status-err";
+        status.textContent = "❌ Envoi commande impossible: " + e.message;
     }
 }
 
@@ -469,6 +498,20 @@ function drawZone(z, type) {
 // ================================
 setInterval(loadData, 100);
 loadData();
+
+canvas.addEventListener("click", (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = event.clientX - rect.left;
+    const py = event.clientY - rect.top;
+
+    const xCmRaw = px / SCALE;
+    const yCmRaw = (CANVAS_H - py) / SCALE;
+
+    const xCm = Math.max(0, Math.min(300, xCmRaw));
+    const yCm = Math.max(0, Math.min(200, yCmRaw));
+
+    sendGoToCommand(xCm, yCm);
+});
 </script>
 </body>
 </html>

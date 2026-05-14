@@ -1,1 +1,5 @@
 *.o
+Dev/build/bin/wallII
+Dev/lidar_data.csv
+Tests/teensy/rpi_uart_sender
+Tests/lidar_visual/build/test_lidar_visual

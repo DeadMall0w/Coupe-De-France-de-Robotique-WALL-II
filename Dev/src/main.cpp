@@ -5,6 +5,7 @@
 
 #include "../includes/vision.h"
 #include "../includes/camera.h"
+#include "../includes/chassis.h"
 // #include "../includes/strategy.hpp"
 #include "../includes/Board.hpp"
 #include "../includes/Constant.h"
@@ -56,6 +57,12 @@ int main(int argc, char *argv[]) {
 
     // Initialisation
     board.initialiseData("data/config.json");
+
+    // Calibration repère châssis:
+    // Teensy (0,0,0) -> Plateau (150,25,-90)
+    chassisSetBoardReferencePose(150.0, 25.0, -90.0);
+    // Correction orientation axes locaux OTOS/Teensy vers plateau
+    chassisSetLocalAxesSigns(1.0, -1.0);
 
     //* <----- tests --------->
     // std::cout << "=== Test Singleton Board ===\n";
@@ -126,6 +133,7 @@ int main(int argc, char *argv[]) {
     //* <----- Lancements des différents threads --->
     std::atomic<bool> stopVision = false;
     std::atomic<bool> stopCamera = false;
+    std::atomic<bool> stopChassis = false;
     std::atomic<bool> stopStrategy = false;
 
     
@@ -135,6 +143,9 @@ int main(int argc, char *argv[]) {
     
     // Lancement du thread caméra
     std::thread t_camera (camera, &stopCamera);
+    
+        // Lancement du thread communication châssis (UART Teensy)
+        std::thread t_chassis (chassis, &stopChassis);
 
     std::thread t_strategy;
 
@@ -221,10 +232,12 @@ int main(int argc, char *argv[]) {
     //todo: dire à tous les threads de finir ce qu'ils font et de se mettre en état d'arrêt
     stopVision = true;
     stopCamera = true;
+    stopChassis = true;
     
     // attendre les threads
     if (t_vision.joinable()) t_vision.join();
     if (t_camera.joinable()) t_camera.join();
+    if (t_chassis.joinable()) t_chassis.join();
     if (inputThread.joinable()) inputThread.join();
 
 
