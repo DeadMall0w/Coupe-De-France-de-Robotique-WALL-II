@@ -33,7 +33,13 @@ void vision(std::atomic<bool>* stop){
 
             // une fois la boucle terminé on déconnecte le lidar
             lidarTop->disconnect();
+            *stop = true; // On marque l'arrêt
+        }else { //! on a pas réussi à lancer le scan
+            *stop = true; // On marque l'arrêt
         }
+    }else {//! on a pas réussi à lancer le lidar
+        *stop = true; // On marque l'arrêt
+        // TODO : peut être tenter de lancer le lidar sur un autre port 
     }
 }
 
