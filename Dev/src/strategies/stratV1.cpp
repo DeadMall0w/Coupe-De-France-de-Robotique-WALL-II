@@ -3,9 +3,9 @@
 #include <thread>
 #include <atomic>
 
-#include "../includes/strategy.hpp"
-#include "../includes/Board.hpp"
-#include "../includes/color.h"
+#include "stratV1.hpp"
+#include "../../includes/Board.hpp"
+#include "../../includes/color.h"
 
 
 /*
@@ -53,18 +53,9 @@ Le robot regarde pour la zone de tasseau libre la plus proche
 Il y va, il récupère les tasseaux et va vers la zone de dépôt la plus proche
 Ce cycle continu tant qu'il y a des zones libres et qu'il reste plus de 15secondes
 */
-void strategy(std::atomic<bool>* stop){
-    std::cout << "HELLO !" << std::endl;
+void strategyV1(std::atomic<bool>* stop){
+    std::cout << "HELLO ! (v1)" << std::endl;
     // while ()
 }
 
-
-
-
-
-
-//* <===== SOUS-STRATEGIES ======>
-void MoveTo(){
-
-}
 

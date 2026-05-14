@@ -31,21 +31,21 @@ bool connectLidar(ILidarDriver*& lidar, IChannel*& channel) {
 
     auto channelResult = createSerialPortChannel(PORT, BAUDRATE);
     if (SL_IS_FAIL(channelResult.err)) {
-        std::cerr << "[ERROR] Impossible d'ouvrir le port série.\n";
+        std::cerr << "[LIDAR] Impossible d'ouvrir le port série.\n";
         return false;
     }
     channel = channelResult.value;
 
     auto drvResult = createLidarDriver();
     if (SL_IS_FAIL(drvResult.err)) {
-        std::cerr << "[ERROR] Impossible de créer le driver LIDAR.\n";
+        std::cerr << "[LIDAR] Impossible de créer le driver LIDAR.\n";
         delete channel;
         return false;
     }
     lidar = drvResult.value;
 
     if (SL_IS_FAIL(lidar->connect(channel))) {
-        std::cerr << "[ERROR] Impossible de se connecter au LIDAR.\n";
+        std::cerr << "[LIDAR] Impossible de se connecter au LIDAR.\n";
         delete lidar;
         delete channel;
         return false;
@@ -54,7 +54,7 @@ bool connectLidar(ILidarDriver*& lidar, IChannel*& channel) {
     std::cout << "[OK] LIDAR connecté sur " << PORT << "\n";
     auto res = lidar->startScan(false, true);
     if (SL_IS_FAIL(res)) {
-        std::cerr << "[ERROR] Erreur au démarrage du scan.\n";
+        std::cerr << "[LIDAR] Erreur au démarrage du scan.\n";
         lidar->disconnect();
         delete lidar;
         delete channel;

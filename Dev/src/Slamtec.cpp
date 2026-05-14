@@ -21,14 +21,14 @@ bool Slamtec::connect() {
 
     if (!std::filesystem::exists(this->port)) {
         this->ChangeState(LidarState::error);
-        std::cout << RED << "[ERROR] Le port " << this->port << " n'existe pas." << RESET << std::endl;
+        std::cout << RED << "[LIDAR] Le port " << this->port << " n'existe pas." << RESET << std::endl;
         return false;
     }
 
     auto channelResult = createSerialPortChannel(this->port, this->BAUDRATE);
     if (SL_IS_FAIL(channelResult.err)) {
         this->ChangeState(LidarState::error);
-        std::cout << RED << "[ERROR] Impossible d'ouvrir le port "<< this->port << "." << RESET << std::endl;
+        std::cout << RED << "[LIDAR] Impossible d'ouvrir le port "<< this->port << "." << RESET << std::endl;
         return false;
     }
     this->channel = channelResult.value;
@@ -36,7 +36,7 @@ bool Slamtec::connect() {
     auto drvResult = createLidarDriver();
     if (SL_IS_FAIL(drvResult.err)) {
         this->ChangeState(LidarState::error);
-        std::cout << RED << "[ERROR] Impossible de créer le driver LIDAR."  << RESET << std::endl;
+        std::cout << RED << "[LIDAR] Impossible de créer le driver LIDAR."  << RESET << std::endl;
         delete this->channel;
         return false;
     }
@@ -44,7 +44,7 @@ bool Slamtec::connect() {
 
     if (SL_IS_FAIL(this->driver->connect(this->channel))) {
         this->ChangeState(LidarState::error);
-        std::cout << RED << "[ERROR] Impossible de se connecter au LIDAR."  << RESET << std::endl;
+        std::cout << RED << "[LIDAR] Impossible de se connecter au LIDAR."  << RESET << std::endl;
         delete this->driver;
         delete this->channel;
         return false;
@@ -79,13 +79,13 @@ void Slamtec::disconnect(){
 bool Slamtec::startScan() {
     if (this->state != LidarState::ready) {
         this->ChangeState(LidarState::error);
-        std::cout << RED << "[ERROR] Impossible de lancer un scan, lidar en état : " << this->state << RESET << std::endl;
+        std::cout << RED << "[LIDAR] Impossible de lancer un scan, lidar en état : " << this->state << RESET << std::endl;
         return false;
     }
 
     auto res = this->driver->startScan(false, true);
     if (SL_IS_FAIL(res)) {
-        std::cerr << "[ERROR] Erreur au démarrage du scan, code : " << res << "\n";
+        std::cerr << "[LIDAR] Erreur au démarrage du scan, code : " << res << "\n";
         this->ChangeState(LidarState::error);
         this->disconnect();
         return false;

@@ -67,6 +67,17 @@ void setMotor(int v1, int v2, int v3, int v4){
 
 void loop() {
 
+    MotoDriver.chanPwm(0, 100);
+    MotoDriver.chanPwm(2, 100);
+    MotoDriver.chanPwm(4, 100);
+    MotoDriver.chanPwm(6, 100);
+}
+
+    /*
+
+
+
+
       int valA0 = analogRead(A0); // Lit la valeur analogique sur A0 (0 à 1023)
   int valA1 = analogRead(A1); // Lit la valeur analogique sur A1
 
@@ -144,6 +155,8 @@ void loop() {
 
     delay(100); // Petit délai pour éviter de flooder le serial
 }
+
+*/
 
 
 

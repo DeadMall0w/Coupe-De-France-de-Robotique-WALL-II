@@ -1,6 +1,5 @@
 // script responsable de toute la gestion de la vision (lancé dans un thread séparé)
 
-
 // includes
 #include <iostream>
 #include <chrono>
@@ -18,8 +17,7 @@
 using namespace std::chrono;
 
 // headers
-void runLoop(std::atomic<bool>* stop);
-
+void runLoop(std::atomic<bool> *stop);
 
 std::unique_ptr<Slamtec> lidarTop;
 
@@ -28,26 +26,32 @@ void vision(std::atomic<bool>* stop){
     lidarTop = std::make_unique<Slamtec>("/dev/ttyUSB0"); // TODO : remplacer chemin par constante
 
     if (lidarTop->connect()){ // si on à réussi à se connecter
-            lidarTop->disconnect();
-         
-        // if (lidarTop->startScan()){ // si on à réussi à lancer le scan
-        //     runLoop(stop);
+        if (lidarTop->startScan()){ // si on à réussi à lancer le scan
+            runLoop(stop);
 
-        //     // une fois la boucle terminé on déconnecte le lidar
-        //     lidarTop->disconnect();
-        // }
+            // une fois la boucle terminé on déconnecte le lidar
+            lidarTop->disconnect();
+            *stop = true; // On marque l'arrêt
+        }else { //! on a pas réussi à lancer le scan
+            *stop = true; // On marque l'arrêt
+        }
+    }else {//! on a pas réussi à lancer le lidar
+        *stop = true; // On marque l'arrêt
+        // TODO : peut être tenter de lancer le lidar sur un autre port 
     }
 }
 
+void runLoop(std::atomic<bool> *stop)
+{
+    Board &board = Board::instance();
 
-void runLoop(std::atomic<bool>* stop) {
-    Board& board = Board::instance();
-
-    while (!*stop) {
+    while (!*stop)
+    {
         std::vector<ScanPoint> points;
 
         // grabData est bloquant, ne renvoie les points que quand il y à des nouveaux
-        if (lidarTop->grabData(points)) {
+        if (lidarTop->grabData(points))
+        {
             // Export CSV pour debug (peut être désactivé en production)
             LidarUtils::writeScanToCSV(points);
 
@@ -59,17 +63,17 @@ void runLoop(std::atomic<bool>* stop) {
             LidarProcessingResult result = LidarProcessing::processScan(
                 points,
                 myRobot.position,
-                orientation
-            );
+                orientation);
 
             // Log de debug
-            if (result.enemyDetected) {
-                std::cout << YELLOW 
-                    << "[LIDAR] Ennemi détecté à (" 
-                    << result.enemyPosition.x_cm << ", " 
-                    << result.enemyPosition.y_cm << ") cm"
-                    << " | cluster: " << result.clusterSize << " pts"
-                    << RESET << std::endl;
+            if (result.enemyDetected)
+            {
+                std::cout << YELLOW
+                          << "[LIDAR] Ennemi détecté à ("
+                          << result.enemyPosition.x_cm << ", "
+                          << result.enemyPosition.y_cm << ") cm"
+                          << " | cluster: " << result.clusterSize << " pts"
+                          << RESET << std::endl;
             }
         }
     }

@@ -52,7 +52,7 @@ enum class ZoneState {
 // Objet de jeu
 // ================================
 
-// Un élément que le robot peut tenir (ex: palets)
+// Tasseau de bois
 struct Cleat { 
     Team color; // couleur correspondant à l'équipe
 };
