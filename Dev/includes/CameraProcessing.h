@@ -97,6 +97,7 @@ public:
     bool isOpened() const;
 
     void    setDebug(bool enabled);
+    void    setDebugFlip(bool enabled);
     cv::Mat getDebugFrame() const;
 
 private:
@@ -108,6 +109,7 @@ private:
     cv::aruco::ArucoDetector     detector;
 
     bool    debugEnabled = false;
+    bool    debugFlip    = false;
     cv::Mat debugFrame;
 
     // État du lissage EMA par tag ID (permet de suivre chaque caisse indépendamment)

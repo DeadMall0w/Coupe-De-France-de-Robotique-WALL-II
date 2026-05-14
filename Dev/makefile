@@ -2,10 +2,13 @@
 #      ⚙️ Makefile — WALL-II (Official / Debug)
 # ======================================================
 
+# Déterminer le répertoire du makefile (chemin absolu)
+MAKEDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
 # Compilateur et options par défaut
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra \
-            -I$(PWD)/lib/include \
+            -I$(MAKEDIR)lib/include \
             $(shell pkg-config --cflags opencv4)
 
 # Flags de linkage OpenCV
@@ -26,7 +29,7 @@ OFFICIAL_OBJ_DIR := build/obj/official
 OFFICIAL_OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OFFICIAL_OBJ_DIR)/%.o,$(SRCS))
 
 # Librairie LIDAR
-LIDAR_LIB := $(PWD)/lib/bin/libsl_lidar_sdk.a
+LIDAR_LIB := $(MAKEDIR)lib/bin/libsl_lidar_sdk.a
 
 # ======================================================
 #        🏁 Version officielle (Tournoi)

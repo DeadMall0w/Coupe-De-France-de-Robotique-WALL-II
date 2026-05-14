@@ -57,7 +57,7 @@ static constexpr double CAM_CY        = 240.0;
 // TOLÉRANCES POUR LES ORDRES (en mm / degrés)
 // ==========================================
 
-static constexpr double TARGET_Z     = 300.0; // distance cible pour prise (mm)
+static constexpr double TARGET_Z     = 217.0; // distance cible pour prise (mm)
 static constexpr double TOL_Z        =  50.0; // tolérance distance (mm)
 static constexpr double TOL_X        =  40.0; // tolérance latérale (mm)
 static constexpr double TARGET_ANGLE =  90.0; // angle cible du tag (degrés, ±90° = tasseau perpendiculaire)
@@ -233,6 +233,7 @@ void CameraProcessing::release() {
 
 bool CameraProcessing::isOpened() const { return cap.isOpened(); }
 void CameraProcessing::setDebug(bool enabled) { debugEnabled = enabled; }
+void CameraProcessing::setDebugFlip(bool enabled) { debugFlip = enabled; }
 Mat  CameraProcessing::getDebugFrame() const  { return debugFrame; }
 
 // ================================
@@ -249,8 +250,24 @@ CameraResult CameraProcessing::processNextFrame() {
         return result;
     }
 
-    if (debugEnabled)
+    if (debugEnabled) {
         debugFrame = frame.clone();
+        if (debugFlip)
+            cv::flip(debugFrame, debugFrame, -1);
+    }
+
+    const bool doFlip = debugEnabled && debugFlip && !debugFrame.empty();
+    const int  frameW = frame.cols;
+    const int  frameH = frame.rows;
+    auto mapPt = [&](const Point2f& p) -> Point2f {
+        if (!doFlip) return p;
+        return Point2f(static_cast<float>(frameW - 1) - p.x,
+                       static_cast<float>(frameH - 1) - p.y);
+    };
+    auto mapPoint = [&](const Point2f& p) -> Point {
+        Point2f mp = mapPt(p);
+        return Point(cvRound(mp.x), cvRound(mp.y));
+    };
 
     // --- Détection ArUco ---
     vector<vector<Point2f>> corners, rejected;
@@ -319,16 +336,23 @@ CameraResult CameraProcessing::processNextFrame() {
             const string label    = isBlue ? "BLEU  [36]"      : "JAUNE [47]";
 
             // Dessiner le tag
+            vector<Point2f> drawCorners;
+            if (doFlip) {
+                drawCorners.reserve(corners[i].size());
+                for (const auto& c : corners[i]) drawCorners.push_back(mapPt(c));
+            } else {
+                drawCorners = corners[i];
+            }
             aruco::drawDetectedMarkers(debugFrame,
-                                       vector<vector<Point2f>>{corners[i]},
+                                       vector<vector<Point2f>>{drawCorners},
                                        vector<int>{id}, colTag);
 
             // Contour tasseau (vue du dessus : 150 × 50 mm)
             RotatedRect tasseauRect = deduceTasseauRect(corners[i]);
             Point2f pts[4]; tasseauRect.points(pts);
             for (int j = 0; j < 4; j++)
-                line(debugFrame, pts[j], pts[(j+1)%4], colCrate, 2, LINE_AA);
-            circle(debugFrame, tasseauRect.center, 4, Scalar(255,255,255), -1, LINE_AA);
+                line(debugFrame, mapPoint(pts[j]), mapPoint(pts[(j+1)%4]), colCrate, 2, LINE_AA);
+            circle(debugFrame, mapPoint(tasseauRect.center), 4, Scalar(255,255,255), -1, LINE_AA);
 
             // Flèche axe longitudinal
             double pxSize = tagPixelSize(corners[i]);
@@ -336,17 +360,21 @@ CameraResult CameraProcessing::processNextFrame() {
             const double halfL   = (TASSEAU_LONG_MM / TAG_SIZE_MM) * pxSize * 0.5;
             Point2f axis(static_cast<float>(cos(yaw_rad) * halfL),
                          static_cast<float>(sin(yaw_rad) * halfL));
-            Point2f tc = tagCenter(corners[i]);
-            arrowedLine(debugFrame, tc - axis, tc + axis, Scalar(255,255,0), 1, LINE_AA, 0, 0.08);
+                Point2f tc = tagCenter(corners[i]);
+                arrowedLine(debugFrame, mapPoint(tc - axis), mapPoint(tc + axis),
+                    Scalar(255,255,0), 1, LINE_AA, 0, 0.08);
 
             // Annotation compacte par tasseau
             int tx = (int)tc.x - 50;
             int ty = (int)tc.y;
             putText(debugFrame, label,
-                    Point(tx, ty-30), FONT_HERSHEY_SIMPLEX, 0.38, colCrate, 1, LINE_AA);
+                    mapPoint(Point2f((float)tx, (float)ty - 30.0f)),
+                    FONT_HERSHEY_SIMPLEX, 0.38, colCrate, 1, LINE_AA);
             string sPos = "Z=" + to_string((int)ema.z) + " X=" +
                           (ema.x >= 0 ? "+" : "") + to_string((int)ema.x);
-            putText(debugFrame, sPos, Point(tx, ty-16), FONT_HERSHEY_SIMPLEX, 0.35, colCrate, 1, LINE_AA);
+                putText(debugFrame, sPos,
+                    mapPoint(Point2f((float)tx, (float)ty - 16.0f)),
+                    FONT_HERSHEY_SIMPLEX, 0.35, colCrate, 1, LINE_AA);
         }
     }
 
@@ -430,11 +458,12 @@ CameraResult CameraProcessing::processNextFrame() {
                 RotatedRect groupRect = minAreaRect(allPts);
                 Point2f gpts[4]; groupRect.points(gpts);
                 for (int j = 0; j < 4; j++)
-                    line(debugFrame, gpts[j], gpts[(j+1)%4], Scalar(0,255,255), 2, LINE_AA);
+                    line(debugFrame, mapPoint(gpts[j]), mapPoint(gpts[(j+1)%4]),
+                         Scalar(0,255,255), 2, LINE_AA);
                 // Croix au centre du groupe
-                Point2f gc = groupRect.center;
-                line(debugFrame, gc + Point2f(-8,0), gc + Point2f(8,0), Scalar(0,255,255), 2, LINE_AA);
-                line(debugFrame, gc + Point2f(0,-8), gc + Point2f(0,8), Scalar(0,255,255), 2, LINE_AA);
+                Point gc = mapPoint(groupRect.center);
+                line(debugFrame, gc + Point(-8,0), gc + Point(8,0), Scalar(0,255,255), 2, LINE_AA);
+                line(debugFrame, gc + Point(0,-8), gc + Point(0,8), Scalar(0,255,255), 2, LINE_AA);
             }
         }
     }

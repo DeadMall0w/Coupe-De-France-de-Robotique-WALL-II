@@ -10,7 +10,7 @@
 // --- Paramètres ---
 // Utilisation de UART0 sur Raspberry Pi 5
 // UART0: GPIO 14 (TXD) = Pin 8, GPIO 15 (RXD) = Pin 10
-#define SERIAL_PORT "/dev/serial0" 
+#define SERIAL_PORT "/dev/ttyAMA3" 
 #define BAUD_RATE 9600  // Vitesse compatible avec Arduino (9600 bauds)
 #define DELAY_MS 50 // Délai entre chaque envoi (en millisecondes)
 

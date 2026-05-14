@@ -16,7 +16,12 @@ INC_DIR := $(DEV_DIR)/includes
 # ---- Compilateur ----
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra \
-            -I$(DEV_DIR)/lib/include
+			-I$(DEV_DIR)/lib/include
+
+OPENCV_CFLAGS := $(shell pkg-config --cflags opencv4 2>/dev/null || pkg-config --cflags opencv)
+OPENCV_LIBS := $(shell pkg-config --libs opencv4 2>/dev/null || pkg-config --libs opencv)
+
+CXXFLAGS += $(OPENCV_CFLAGS)
 
 # ---- Librairie LIDAR ----
 LIDAR_LIB := $(DEV_DIR)/lib/bin/libsl_lidar_sdk.a
@@ -25,13 +30,14 @@ LIDAR_LIB := $(DEV_DIR)/lib/bin/libsl_lidar_sdk.a
 # On réutilise les mêmes fichiers que Dev, sauf main.cpp et vision.cpp (on a notre propre main)
 DEV_SRCS := $(SRC_DIR)/board.cpp \
             $(SRC_DIR)/Slamtec.cpp \
-            $(SRC_DIR)/LidarProcessing.cpp
+			$(SRC_DIR)/LidarProcessing.cpp \
+			$(SRC_DIR)/chassis.cpp
 
 TEST_SRC := test_lidar_visual.cpp
 
 # ---- Fichiers objets ----
 OBJ_DIR := build
-DEV_OBJS := $(OBJ_DIR)/board.o $(OBJ_DIR)/Slamtec.o $(OBJ_DIR)/LidarProcessing.o
+DEV_OBJS := $(OBJ_DIR)/board.o $(OBJ_DIR)/Slamtec.o $(OBJ_DIR)/LidarProcessing.o $(OBJ_DIR)/chassis.o
 TEST_OBJ := $(OBJ_DIR)/test_lidar_visual.o
 ALL_OBJS := $(DEV_OBJS) $(TEST_OBJ)
 
@@ -47,7 +53,7 @@ ARGS ?= 50 100 0
 all: $(TARGET)
 
 $(TARGET): $(ALL_OBJS) | $(OBJ_DIR)
-	$(CXX) $(CXXFLAGS) $(ALL_OBJS) $(LIDAR_LIB) -o $@ -lpthread
+	$(CXX) $(CXXFLAGS) $(ALL_OBJS) $(LIDAR_LIB) -o $@ -lpthread $(OPENCV_LIBS)
 
 # Objets depuis Dev/src/
 $(OBJ_DIR)/board.o: $(SRC_DIR)/board.cpp | $(OBJ_DIR)
@@ -57,6 +63,9 @@ $(OBJ_DIR)/Slamtec.o: $(SRC_DIR)/Slamtec.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/LidarProcessing.o: $(SRC_DIR)/LidarProcessing.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/chassis.o: $(SRC_DIR)/chassis.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Objet du test
@@ -73,11 +82,11 @@ run: $(TARGET)
 	./$(TARGET) $(ARGS)
 
 # Lance un serveur HTTP local pour visualiser le HTML
-# Ouvre http://localhost:8080/lidar_viewer.html dans ton navigateur
+# Ouvre http://localhost:8089/lidar_viewer.html dans ton navigateur
 serve:
-	@echo "🌐 Serveur HTTP sur http://localhost:8080/lidar_viewer.html"
+	@echo "🌐 Serveur HTTP sur http://localhost:8089/lidar_viewer.html"
 	@echo "   (Ctrl+C pour arrêter)"
-	python3 -m http.server 8089
+	python3 server.py 8089
 
 # ======================================================
 #        🧹 Nettoyage

@@ -5,6 +5,7 @@
 
 #include "../includes/vision.h"
 #include "../includes/camera.h"
+#include "../includes/chassis.h"
 #include "../includes/Board.hpp"
 #include "../includes/Constant.h"
 #include "../includes/color.h"
@@ -30,6 +31,12 @@ int main() {
 
     // Initialisation
     board.initialiseData("data/config.json");
+
+    // Calibration repère châssis:
+    // Teensy (0,0,0) -> Plateau (150,25,-90)
+    chassisSetBoardReferencePose(150.0, 25.0, -90.0);
+    // Correction orientation axes locaux OTOS/Teensy vers plateau
+    chassisSetLocalAxesSigns(1.0, -1.0);
 
     //* <----- tests --------->
     // std::cout << "=== Test Singleton Board ===\n";
@@ -98,6 +105,7 @@ int main() {
     auto start = steady_clock::now();
     std::atomic<bool> stopVision = false;
     std::atomic<bool> stopCamera = false;
+    std::atomic<bool> stopChassis = false;
     
     //* <----- Lancements des différents threads --->
     // Lancement du thread vision
@@ -105,6 +113,9 @@ int main() {
     
     // Lancement du thread caméra
     std::thread t_camera (camera, &stopCamera);
+    
+        // Lancement du thread communication châssis (UART Teensy)
+        std::thread t_chassis (chassis, &stopChassis);
 
     //* <----- Attente appuis capteur 'start' ----->
     //todo: attendre cette action
@@ -134,10 +145,12 @@ int main() {
     //todo: dire à tous les threads de finir ce qu'ils font et de se mettre en état d'arrêt
     stopVision = true;
     stopCamera = true;
+    stopChassis = true;
     
     // attendre les threads
     if (t_vision.joinable()) t_vision.join();
     if (t_camera.joinable()) t_camera.join();
+    if (t_chassis.joinable()) t_chassis.join();
     if (inputThread.joinable()) inputThread.join();
     
     //todo: se mettre en standby pour une nouvelle partie / changement de configuration

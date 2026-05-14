@@ -28,12 +28,14 @@ void vision(std::atomic<bool>* stop){
     lidarTop = std::make_unique<Slamtec>("/dev/ttyUSB0"); // TODO : remplacer chemin par constante
 
     if (lidarTop->connect()){ // si on à réussi à se connecter
-        if (lidarTop->startScan()){ // si on à réussi à lancer le scan
-            runLoop(stop);
-
-            // une fois la boucle terminé on déconnecte le lidar
             lidarTop->disconnect();
-        }
+         
+        // if (lidarTop->startScan()){ // si on à réussi à lancer le scan
+        //     runLoop(stop);
+
+        //     // une fois la boucle terminé on déconnecte le lidar
+        //     lidarTop->disconnect();
+        // }
     }
 }
 
